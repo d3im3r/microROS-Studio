@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/d3im3r/d3im3r-brand-assets",
+  "commit": "89bb0f46709a2edf548d91ff8c05798776c10689",
+  "files": [
+    "assets/svg/horizontal-light.svg",
+    "assets/svg/horizontal-dark.svg",
+    "assets/favicon/apple-touch-icon.png",
+    "LICENSE",
+    "BRAND.md"
+  ]
+}
