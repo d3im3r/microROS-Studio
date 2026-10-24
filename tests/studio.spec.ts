@@ -48,7 +48,7 @@ test("configures, validates and downloads only the firmware files", async ({ pag
   await help.getByText("Data types and topics",{exact:true}).click();
   await expect(help.getByText("std_msgs / Bool",{exact:true})).toBeVisible();
   await help.getByText("Inputs and sensors",{exact:true}).click();
-  await help.getByText("MPU-6050",{exact:true}).click();
+  await help.getByText("6-axis inertial sensor · MPU-6050",{exact:true}).click();
   await expect(help.getByText("/acceleration",{exact:false})).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -77,18 +77,18 @@ test("wizard: sensors, I2C, outputs and review", async ({ page }) => {
   await wizard.getByRole("button",{name:"Next",exact:true}).click();
   await expect(page.getByRole("combobox",{name:"SDA",exact:true})).toHaveValue("21");
   await wizard.getByRole("button",{name:"Next",exact:true}).click();
-  await page.getByRole("button",{name:"BNO055",exact:true}).click();
+  await page.getByRole("button",{name:"9-axis orientation sensor · BNO055",exact:true}).click();
   await expect(page.getByLabel("ROS 2 topic")).toHaveValue("/orientation");
-  await page.getByRole("button",{name:"VL53L0Xv2",exact:true}).click();
+  await page.getByRole("button",{name:"Infrared ToF distance sensor · VL53L0Xv2",exact:true}).click();
   await expect(page.getByLabel("I2C address")).toHaveValue("41");
   await expect(page.getByLabel("Generated code for main.cpp")).toContainText("sensor_3.begin(41)");
-  await page.getByRole("button",{name:"BNO055 /orientation"}).click();
+  await page.getByRole("button",{name:"9-axis orientation sensor · BNO055 /orientation"}).click();
   await page.getByLabel("I2C address").selectOption("41");
   await expect(page.getByRole("button",{name:"main.cpp",exact:true}).first()).toBeDisabled();
   await page.getByLabel("I2C address").selectOption("40");
   await expect(page.getByRole("button",{name:"main.cpp",exact:true}).first()).toBeEnabled();
   await page.getByRole("button",{name:"4 Outputs and actuators",exact:true}).click();
-  await page.getByRole("button",{name:"Servo motor",exact:true}).click();
+  await page.getByRole("button",{name:"PWM servo motor",exact:true}).click();
   await expect(page.getByLabel("Servo signal")).toBeVisible();
   await expect(page.getByLabel("Generated code for main.cpp")).toContainText("ledcSetup(0, 50, 16)");
   await wizard.getByRole("button",{name:"Next",exact:true}).click();
@@ -161,14 +161,14 @@ test("palette selection is independent of mode and persists", async ({ page }) =
 test("final GPIO conflict alert and large diagram navigation", async ({page})=>{
  await page.goto("/");
  await page.getByRole("button",{name:"3 Inputs and sensors",exact:true}).click();
- await page.getByRole("button",{name:"Generic digital input",exact:true}).click();
+ await page.getByRole("button",{name:"Generic digital input · GPIO",exact:true}).click();
  await page.getByRole("combobox",{name:"Signal",exact:true}).selectOption("2");
  await page.getByRole("button",{name:"5 Review and generate",exact:true}).click();
  const wizard=page.getByRole("complementary",{name:"micro-ROS application wizard"});
  const alert=wizard.getByRole("alert",{name:"Configuration conflicts"});
  await expect(alert).toContainText("GPIO 2 conflict");
  await expect(alert).toContainText("LED / digital output (/led)");
- await expect(alert).toContainText("Generic digital input (/digital_input)");
+ await expect(alert).toContainText("Generic digital input · GPIO (/digital_input)");
  await expect(page.getByRole("button",{name:"main.cpp",exact:true}).first()).toBeDisabled();
  await expect(wizard.getByRole("button",{name:"View generated code"})).toBeDisabled();
  await page.getByRole("combobox",{name:"Signal",exact:true}).selectOption("4");
@@ -301,7 +301,7 @@ test("board selection, GPIO options, generation and persistence", async ({ page 
  await expect(page.getByText("Blue LED on GPIO8, active low · BOOT on GPIO9 · RESET on EN",{exact:true})).toBeVisible();
  await page.keyboard.press("Escape");
  await page.getByRole("button",{name:"3 Inputs and sensors",exact:true}).click();
- await page.getByRole("button",{name:"Potentiometer",exact:true}).click();
+ await page.getByRole("button",{name:"Analog position input · Potentiometer",exact:true}).click();
  const adc=page.getByRole("combobox",{name:"ADC1 signal",exact:true});
  await expect(adc.locator("option")).toHaveText(["GPIO 0","GPIO 1","GPIO 2","GPIO 3","GPIO 4"]);
  await expect(adc).toHaveValue("0");
@@ -423,22 +423,22 @@ test("new devices, board-specific touch, names, onboard LED and next steps",asyn
  const help=page.getByRole("button",{name:"Board and pins",exact:true});await help.click();
  await expect(page.getByRole("dialog",{name:/Board and pins/})).toBeVisible();await page.keyboard.press("Escape");
  await page.getByRole("button",{name:"3 Inputs and sensors",exact:true}).click();
- await expect(page.getByRole("button",{name:"Capacitive touch pin",exact:true})).toBeDisabled();
- await page.getByRole("button",{name:"Internal chip temperature",exact:true}).click();
+ await expect(page.getByRole("button",{name:"Capacitive touch input",exact:true})).toBeDisabled();
+ await page.getByRole("button",{name:"Internal temperature sensor",exact:true}).click();
  await expect(page.getByLabel("Generated code for main.cpp")).toContainText("temperatureRead()");
- await page.getByRole("button",{name:"LM35 temperature sensor",exact:true}).click();
+ await page.getByRole("button",{name:"Analog temperature sensor · LM35",exact:true}).click();
  await expect(page.getByLabel("Generated code for main.cpp")).toContainText("analogReadMilliVolts");
  await page.getByRole("button",{name:/Project and node$/}).click();
  await board.selectOption("seeed_xiao_esp32s3");
  await page.getByRole("button",{name:"3 Inputs and sensors",exact:true}).click();
- await page.getByRole("button",{name:"Capacitive touch pin",exact:true}).click();
+ await page.getByRole("button",{name:"Capacitive touch input",exact:true}).click();
  await expect(page.getByRole("combobox",{name:"Touch signal",exact:true}).locator("option")).toHaveText(Array.from({length:9},(_,i)=>`GPIO ${i+1}`));
  await page.getByLabel("ROS 2 topic",{exact:true}).fill("touch_sensor");
  await expect(page.getByLabel("ROS 2 topic",{exact:true})).toHaveValue("/touch_sensor");
  // Restore the valid initial project for the final navigation and built-in LED checks.
  page.once("dialog",dialog=>dialog.accept());await page.getByRole("button",{name:"Restore example",exact:true}).click();
  await page.getByRole("button",{name:"4 Outputs and actuators",exact:true}).click();
- for(const title of ["Active buzzer","16×2 I²C LCD","TM1637 4-digit display","28BYJ-48 stepper motor + ULN2003","MAX7219 LED matrix"])await expect(page.getByRole("button",{name:title,exact:true})).toBeEnabled();
+ for(const title of ["Active buzzer","I2C character LCD · 16×2","4-digit LED display · TM1637","Stepper motor + driver · 28BYJ-48 + ULN2003","LED matrix + driver · MAX7219"])await expect(page.getByRole("button",{name:title,exact:true})).toBeEnabled();
  await page.getByRole("button",{name:"Active buzzer",exact:true}).click();
  await expect(page.getByRole("combobox",{name:"Buzzer output",exact:true}).locator("option").filter({hasText:"/led_builtin"})).toHaveText("GPIO 2 /led_builtin");
  await page.getByRole("button",{name:"Delete entity",exact:true}).click();
@@ -447,4 +447,46 @@ test("new devices, board-specific touch, names, onboard LED and next steps",asyn
  const instructions=page.getByRole("dialog",{name:"Next steps",exact:true});
  await expect(instructions.getByRole("link",{name:/Download base project/})).toBeVisible();
  await expect(instructions).toContainText("--port 8888");
+});
+
+
+test("Beta 0.2 language toggle persists and keeps firmware unchanged", async ({page})=>{
+ await page.goto("/");
+ await expect(page.getByText("BETA 0.2",{exact:true})).toBeVisible();
+ const original=await page.getByLabel("Generated code for main.cpp").locator(".code-text").allTextContents();
+ await page.getByRole("button",{name:"Switch to Spanish"}).click();
+ await expect(page.locator("html")).toHaveAttribute("lang","es");
+ await expect(page.getByRole("heading",{name:"Construye tu nodo micro-ROS"})).toBeVisible();
+ await expect(page.getByLabel("Nombre del proyecto")).toHaveValue("My first robot");
+ expect(await page.getByLabel("Código generado para main.cpp").locator(".code-text").allTextContents()).toEqual(original);
+ await page.getByRole("button",{name:"3 Entradas y sensores",exact:true}).click();
+ await page.getByRole("button",{name:"Joystick analógico de 2 ejes",exact:true}).click();
+ await page.getByRole("combobox",{name:"Botón",exact:true}).selectOption("-1");
+ await expect(page.getByLabel("Código generado para main.cpp")).toContainText("msg_2.z = 0.0;");
+ await expect(page.getByLabel("Estado de configuración")).toContainText("Configuración válida");
+ await page.reload();
+ await expect(page.getByRole("heading",{name:"Construye tu nodo micro-ROS"})).toBeVisible();
+ await page.getByRole("button",{name:"Cambiar a inglés"}).click();
+ await expect(page.getByRole("heading",{name:"Build your micro-ROS node"})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Publisher + timer",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"3 Inputs and sensors",exact:true}).click();
+ await page.getByRole("button",{name:/2-axis analog joystick.*joystick/}).click();
+ await expect(page.getByRole("combobox",{name:"Button",exact:true})).toHaveValue("-1");
+});
+
+test("Beta 0.2 offers optional XSHUT and STBY and exports named pins",async({page})=>{
+ await page.goto("/");
+ await page.getByRole("button",{name:"3 Inputs and sensors",exact:true}).click();
+ await page.getByRole("button",{name:"Infrared ToF distance sensor · VL53L0Xv2",exact:true}).click();
+ await page.getByRole("combobox",{name:"XSHUT",exact:true}).selectOption("-1");
+ await expect(page.getByLabel("Configuration status")).toContainText("Valid configuration");
+ await page.getByRole("combobox",{name:"I2C address",exact:true}).selectOption("48");
+ await expect(page.getByRole("button",{name:"main.cpp",exact:true}).first()).toBeDisabled();
+ await page.getByRole("combobox",{name:"I2C address",exact:true}).selectOption("41");
+ await page.getByRole("button",{name:"4 Outputs and actuators",exact:true}).click();
+ await page.getByRole("button",{name:"Dual H-bridge motor driver · TB6612FNG",exact:true}).click();
+ await page.getByRole("combobox",{name:"STBY",exact:true}).selectOption("-1");
+ await expect(page.getByLabel("Configuration status")).toContainText("Valid configuration");
+ await expect(page.getByLabel("Generated code for main.cpp")).toContainText("const uint8_t led1 = 2;");
+ await expect(page.getByLabel("Generated code for main.cpp")).toContainText("pinMode(led1, OUTPUT)");
 });

@@ -10,7 +10,7 @@ test("generates a counter, LED and two handles using the base helper", () => {
   assert.match(main, /createTimer\(timer_0, 1000/);
   assert.match(main, /createSubscription\(sub_1/);
   assert.match(main, /counter_0 == INT32_MAX/);
-  assert.match(main, /digitalWrite\(2, msg->data \? HIGH : LOW\)/);
+  assert.match(main, /digitalWrite\(led1, msg->data \? HIGH : LOW\)/);
   assert.match(ini, /board_microros_transport = wifi/);
   assert.doesNotMatch(ini, /lib_deps/);
 });
@@ -26,7 +26,7 @@ test("active-low output starts off and inverts commands", () => {
   if (led.kind !== "subscriber") throw new Error("Invalid fixture");
   led.activeLow = true;
   const { main } = generateFiles(project);
-  assert.match(main, /digitalWrite\(2, HIGH\)/);
+  assert.match(main, /digitalWrite\(led1, HIGH\)/);
   assert.match(main, /msg->data \? LOW : HIGH/);
 });
 test("deduplicates includes and supports Float32 and Bool constants", () => {
@@ -81,7 +81,7 @@ import { createRobotEntity } from "../program";
 test("sensors use actual contracts and only required dependencies", () => {
   const entities = [createRobotEntity("imu-yaw", "imu"), createRobotEntity("tof-triple", "tof")];
   const { main, ini } = generateFiles({ ...defaultProject, entities });
-  assert.equal((main.match(/Wire.begin\(21, 22, 100000\)/g) ?? []).length, 1);
+  assert.equal((main.match(/Wire.begin\(i2c_SDA, i2c_SCL, 100000\)/g) ?? []).length, 1);
   assert.match(main, /atan2\(/);
   assert.match(main, /\{0x30, 0x32, 0x31\}/);
   assert.match(main, /RangeStatus == 0/);
@@ -149,10 +149,14 @@ test("C++ syntax for every block and transport with API doubles", { skip: spawnS
         assert.equal(result.status, 0, `${behavior}/${transport}: ${result.stderr}`);
       }
       for (const type of Object.keys(devices) as DeviceType[]) {
-        const { main } = generateFiles({ ...defaultProject, transport, entities: [createDevice(type, "test")] });
+       for(const disconnected of [false,true]) {
+        const entity=createDevice(type,"test");
+        if(disconnected)for(const role of devices[type].pins){if("optional" in role&&role.optional)entity.pins[role.key]=-1;}
+        const { main } = generateFiles({ ...defaultProject, transport, entities: [entity] });
         writeFileSync(join(dir, "main.cpp"), main);
         const result = spawnSync("g++", ["-std=c++17", "-fsyntax-only", "-I", dir, join(dir, "main.cpp")], { encoding: "utf8" });
         assert.equal(result.status, 0, `${type}/${transport}: ${result.stderr}`);
+       }
       }
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -169,7 +173,7 @@ test("starter program includes a 1 Hz counter and Bool LED on GPIO2", () => {
   assert.equal(counter.period, 1000);
   const { main } = generateFiles(defaultProject);
   assert.match(main, /counter_0 = \(counter_0 == INT32_MAX\)/);
-  assert.match(main, /digitalWrite\(2, msg->data \? HIGH : LOW\)/);
+  assert.match(main, /digitalWrite\(led1, msg->data \? HIGH : LOW\)/);
 });
 
 
@@ -196,7 +200,7 @@ test("I2C final addresses and VL53L0X startup collisions",()=>{
   assert.ok(validateProject({...defaultProject,entities:[vl,second]}).length);
   const {main}=generateFiles({...defaultProject,entities:[vl,{...second,pins:{xshut:18}}]});
   const setup=main.slice(main.indexOf("void setup()"));
-  assert.ok(setup.indexOf("digitalWrite(23, LOW)")<setup.indexOf("sensor_1.begin(48)"));
+  assert.ok(setup.indexOf("digitalWrite(sensor_vl53l0x1_XSHUT, LOW)")<setup.indexOf("sensor_1.begin(48)"));
   assert.ok(setup.indexOf("sensor_1.begin(48)")<setup.indexOf("sensor_0.begin(41)"));
 });
 test("ADC1 and I2C pins, custom bus and resource conflicts",()=>{
@@ -205,7 +209,7 @@ test("ADC1 and I2C pins, custom bus and resource conflicts",()=>{
  const imu=createDevice("mpu6050","imu");
  assert.ok(validateProject({...defaultProject,i2c:{sda:18,scl:18},entities:[imu]}).length);
  assert.ok(validateProject({...defaultProject,i2c:{sda:34,scl:22},entities:[imu]}).length);
- const {main}=generateFiles({...defaultProject,i2c:{sda:18,scl:19},entities:[imu]});assert.match(main,/Wire.begin\(18, 19, 100000\)/);
+ const {main}=generateFiles({...defaultProject,i2c:{sda:18,scl:19},entities:[imu]});assert.match(main,/Wire.begin\(i2c_SDA, i2c_SCL, 100000\)/);
  const dht=createDevice("dht11","dht");assert.ok(validateProject({...defaultProject,entities:[{...dht,period:50}]}).length);
 });
 test("distinct PWM channels and separate servo timers",()=>{
@@ -227,7 +231,7 @@ test("GPIO conflicts identify both devices and signal roles",()=>{
  const p={...defaultProject,entities:[...defaultProject.entities,input]};
  const error=validateProject(p).find(e=>e.includes("GPIO 2 conflict"));
  assert.ok(error?.includes("LED / digital output (/led)"));
- assert.ok(error?.includes("Generic digital input (/digital_input)"));
+ assert.ok(error?.includes("Generic digital input · GPIO (/digital_input)"));
  assert.throws(()=>generateFiles(p));
  const internal={...createDevice("l298n","driver"),pins:{pwmA:13,pwmB:25,in1:26,in2:26,in3:33,in4:32}};
  const internalError=validateProject({...defaultProject,entities:[internal]}).find(e=>e.includes("GPIO 26 conflict"));
@@ -268,7 +272,7 @@ test("C3 and XIAO use their own I2C and UART pins",()=>{
    const profile=boardProfile(board),imu=createDevice("mpu6050","imu");
    const p={...defaultProject,board,entities:[imu]};
    assert.deepEqual(validateProject(p),[]);
-   assert.ok(generateFiles(p).main.includes(`Wire.begin(${profile.i2c.sda}, ${profile.i2c.scl}, 100000)`));
+   assert.ok(generateFiles(p).main.includes(`const uint8_t i2c_SDA = ${profile.i2c.sda};`));
    if(board==="seeed_xiao_esp32s3")assert.ok(generateFiles(p).ini.includes("-DARDUINO_USB_CDC_ON_BOOT=0"));
    else assert.doesNotMatch(generateFiles(p).ini,/build_flags|build_unflags/);
    assert.ok(validateProject({...p,entities:[{...createDevice("led","led"),pins:{signal:profile.uart.tx}}]}).some(e=>e.includes("Serial TX")));
@@ -300,7 +304,7 @@ test("SuperMini specifications and onboard LED I2C conflict",()=>{
  const {main,ini}=generateFiles(p);
  assert.doesNotMatch(ini,/board_build.f_cpu/);
  assert.doesNotMatch(ini,/board_upload.flash_size/);
- assert.match(main,/digitalWrite\(8, HIGH\)/);
+ assert.match(main,/digitalWrite\(led1, HIGH\)/);
  assert.match(main,/msg->data \? LOW : HIGH/);
  const imu=createDevice("mpu6050","imu");
  assert.ok(validateProject({...p,entities:[led,imu]}).some(error=>error.includes("GPIO 8 conflict")));
@@ -329,14 +333,14 @@ test("TTGO does not expose camera or PSRAM pins as outputs",()=>{
  assert.ok(validateProject({...bad,entities:[{...createDevice("led","led"),pins:{signal:33}}]}).some(e=>e.includes("unavailable")));
  const display=createDevice("ssd1306","display"),imu=createDevice("mpu6050","imu");
  assert.deepEqual(validateProject({...bad,entities:[display,imu]}),[]);
- assert.match(generateFiles({...bad,entities:[display,imu]}).main,/Wire.begin\(21, 22, 100000\)/);
+ assert.match(generateFiles({...bad,entities:[display,imu]}).main,/Wire.begin\(i2c_SDA, i2c_SCL, 100000\)/);
 });
 test("AI-Thinker and XIAO onboard LEDs preserve polarity",()=>{
  for(const [board,pin] of [["esp32cam",33],["seeed_xiao_esp32s3",21]] as const){
   const e={...createDevice("led","led"),pins:{signal:pin},activeLow:true};
   const p={...defaultProject,board,entities:[e]};assert.deepEqual(validateProject(p),[]);
-  assert.ok(generateFiles(p).main.includes(`digitalWrite(${pin}, HIGH)`));
-  assert.ok(generateFiles(p).main.includes(`digitalWrite(${pin}, msg->data ? LOW : HIGH)`));
+  assert.ok(generateFiles(p).main.includes(`digitalWrite(led1, HIGH)`));
+  assert.ok(generateFiles(p).main.includes(`digitalWrite(led1, msg->data ? LOW : HIGH)`));
  }
  const xiao=boardProfile("seeed_xiao_esp32s3");
  assert.ok(xiao.title.includes("OV3660"));assert.ok(xiao.specifications!["Camera OV3660"].includes("2048×1536"));
@@ -382,7 +386,7 @@ test("board-specific touch, internal temperature and LM35 ADC1",()=>{
  }
  assert.ok(deviceUnavailableReason("lm35","esp32cam"));
  const main=generateFiles({...defaultProject,entities:[createDevice("lm35","t")]}).main;
- assert.match(main,/analogReadMilliVolts\(34\) \/ 10.0f/);
+ assert.match(main,/analogReadMilliVolts\(sensor_lm35_1\) \/ 10.0f/);
 });
 test("names, fixed port, onboard LED and new actuators",()=>{
  assert.equal(suggestNodeName("temperature"),"temperature_node");assert.equal(suggestNodeName("sensor_node"),"sensor_node");
@@ -390,13 +394,13 @@ test("names, fixed port, onboard LED and new actuators",()=>{
  assert.ok(validateProject({...defaultProject,nodeName:"sensor"}).length);assert.ok(validateProject({...defaultProject,port:9999}).length);
  assert.match(outputPinLabel("esp32-c3-supermini",8),/led_builtin/);
  const stepper=generateFiles({...defaultProject,entities:[createDevice("stepper28byj","s")]});
- assert.match(stepper.main,/HALF4WIRE, 13, 25, 14, 26/);assert.match(stepper.main,/stepper_0.run/);assert.match(stepper.main,/spinSome\(1\)/);assert.doesNotMatch(stepper.main,/runToPosition/);
+ assert.match(stepper.main,/HALF4WIRE, motor_stepper1_IN1, motor_stepper1_IN3, motor_stepper1_IN2, motor_stepper1_IN4/);assert.match(stepper.main,/stepper_0.run/);assert.match(stepper.main,/spinSome\(1\)/);assert.doesNotMatch(stepper.main,/runToPosition/);
  assert.match(stepper.ini,/AccelStepper/);
  const lcd=createDevice("lcd1602","lcd"),oled=createDevice("ssd1306","oled");
  assert.ok(validateProject({...defaultProject,entities:[{...lcd,address:0x3c},oled]}).some(x=>x.includes("I2C")));
  assert.match(generateFiles({...defaultProject,entities:[lcd]}).main,/begin\(16, 2, Wire\)/);
  assert.match(generateFiles({...defaultProject,entities:[createDevice("max7219","m")]}).main,/setRow/);
- assert.match(generateFiles({...defaultProject,entities:[createDevice("active-buzzer","b")]}).main,/digitalWrite\(4, LOW\)/);
+ assert.match(generateFiles({...defaultProject,entities:[createDevice("active-buzzer","b")]}).main,/digitalWrite\(buzzer1, LOW\)/);
 });
 
 test("minimal INI with inherited settings and required exceptions",()=>{
@@ -463,4 +467,105 @@ int main(){setup();test_wifi_connected=false;loop();assert(test_spin_calls==1);a
    const result=spawnSync(binary,[],{encoding:"utf8"});assert.equal(result.status,0,`${transport}: ${result.stderr}`);
   }
  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+
+test("optional pins omit hardware access and keep required pins validated", () => {
+ for(const [type,role] of [["joystick","button"],["vl53l0x","xshut"],["tb6612","standby"]] as const){
+  const device=createDevice(type,type); device.pins[role]=-1;
+  const project={...defaultProject,entities:[device]};
+  assert.deepEqual(validateProject(project),[]);
+  const {main}=generateFiles(project);
+  assert.doesNotMatch(main, /(?:pinMode|digitalWrite|digitalRead)\(-1/);
+  assert.doesNotMatch(main,new RegExp(`const uint8_t [a-zA-Z0-9_]+_${({button:"SW",xshut:"XSHUT",standby:"STBY"})[role]} =`));
+  if(type==="joystick")assert.match(main,/msg_0.z = 0.0;/);
+  if(type==="tb6612"){assert.match(main,/stop_device_0/);assert.doesNotMatch(main,/STANDBY/);}
+  if(type==="vl53l0x")assert.match(main,/sensor_0.begin\(41\)/);
+ }
+ const input=createDevice("digital-input","input"); input.pins.signal=-1;
+ assert.ok(validateProject({...defaultProject,entities:[input]}).length);
+ const joystick=createDevice("joystick","j"); joystick.pins.button=-1;
+ const led={...createDevice("led","led"),pins:{signal:4}};
+ assert.deepEqual(validateProject({...defaultProject,entities:[joystick,led]}),[]);
+ joystick.pins.button=4;
+ assert.ok(validateProject({...defaultProject,entities:[joystick,led]}).some(e=>e.includes("GPIO 4 conflict")));
+});
+
+test("VL53L0X without XSHUT requires one sensor at the default address",()=>{
+ const sensor=createDevice("vl53l0x","distance");sensor.pins.xshut=-1;
+ assert.ok(validateProject({...defaultProject,entities:[{...sensor,address:0x30}]}).some(e=>e.includes("without XSHUT")));
+ const other={...sensor,id:"second",topic:"/distance2",address:0x30,pins:{xshut:18}};
+ assert.ok(validateProject({...defaultProject,entities:[sensor,other]}).some(e=>e.includes("without XSHUT")));
+ assert.throws(()=>generateFiles({...defaultProject,entities:[sensor,other]}));
+});
+
+test("every generated hardware GPIO uses a unique named constant",()=>{
+ for(const type of Object.keys(devices) as DeviceType[]){
+  const {main}=generateFiles({...defaultProject,entities:[createDevice(type,type)]});
+  assert.doesNotMatch(main, /(?:pinMode|digitalWrite|digitalRead|analogRead|analogReadMilliVolts|analogSetPinAttenuation|touchRead|ledcAttachPin|digitalPinToInterrupt|pulseIn|Wire.begin)\(\d+/);
+  const names=[...main.matchAll(/const uint8_t ([a-zA-Z][a-zA-Z0-9_]*) =/g)].map(m=>m[1]);
+  assert.equal(new Set(names).size,names.length);
+ }
+ const one={...createDevice("led","one"),topic:"/led/a",pins:{signal:2}};
+ const two={...createDevice("led","two"),topic:"/led_a",pins:{signal:4}};
+ const {main}=generateFiles({...defaultProject,entities:[one,two]});
+ assert.match(main,/const uint8_t led1 = 2/);
+ assert.match(main,/const uint8_t led2 = 4/);
+});
+
+import { translateText } from "../language/messages";
+test("language translation preserves identifiers and original English",()=>{
+ assert.equal(translateText("Build your micro-ROS node","es"),"Construye tu nodo micro-ROS");
+ assert.equal(translateText("Step 3 of 5","es"),"Paso 3 de 5");
+ assert.equal(translateText("of ","es"),"de ");
+ assert.equal(translateText("Duplicate topic: /digital_output.","es"),"Tópico duplicado: /digital_output.");
+ assert.equal(translateText("Properties · Analog joystick","es"),"Propiedades · Joystick analógico");
+ assert.equal(translateText("Not connected","en"),"Not connected");
+ assert.equal(translateText("/digital_output","es"),"/digital_output");
+});
+
+
+test("hardware constants use device identity and instance counts instead of topics",()=>{
+ const driver={...createDevice("tb6612","driver"),topic:"/motors_1",pins:{...createDevice("tb6612","driver").pins,in4:16}};
+ const first={...defaultProject,entities:[defaultProject.entities[0],driver]};
+ const a=generateFiles(first).main;
+ assert.match(a,/const uint8_t driver_tb1_IN4 = 16;/);
+ assert.match(a,/pinMode\(driver_tb1_IN4, OUTPUT\)/);
+ assert.match(a,/digitalWrite\(driver_tb1_STBY,/);
+ assert.doesNotMatch(a,/PIN_MOTORS|MOTORS_1|driver_tb2/);
+ const second={...driver,id:"driver2",topic:"/motors_2",pins:{pwmA:4,in1:5,in2:12,pwmB:14,in3:15,in4:17,standby:18}};
+ const pair=generateFiles({...defaultProject,entities:[driver,second]}).main;
+ assert.match(pair,/const uint8_t driver_tb1_IN4 = 16;/);
+ assert.match(pair,/const uint8_t driver_tb2_IN4 = 17;/);
+ assert.match(pair,/digitalWrite\(driver_tb2_STBY,/);
+ const b=generateFiles({...first,entities:[{...createDevice("led","extra"),pins:{signal:2}},first.entities[0],{...driver,topic:"/renamed_driver"}]}).main;
+ assert.match(b,/const uint8_t driver_tb1_IN4 = 16;/);
+ assert.match(b,/const uint8_t led1 = 2;/);
+ const joystick=createDevice("joystick","j");
+ const j=generateFiles({...defaultProject,entities:[joystick]}).main;
+ assert.match(j,/const uint8_t joystick1_X = 34;/);
+ assert.match(j,/const uint8_t joystick1_Y = 35;/);
+ assert.match(j,/const uint8_t joystick1_SW = 4;/);
+});
+
+test("shared naming families never duplicate constants in mixed LED programs",()=>{
+ const starter=defaultProject.entities[1];
+ const extra={...createDevice("led","extra"),topic:"/extra_led",pins:{signal:4}};
+ const {main}=generateFiles({...defaultProject,entities:[starter,extra]});
+ assert.match(main,/const uint8_t led1 = 2;/);
+ assert.match(main,/const uint8_t led2 = 4;/);
+ assert.match(main,/digitalWrite\(led2, msg->data/);
+});
+
+test("catalog labels identify sensing technology and motor drivers in both languages",()=>{
+ assert.match(devices.vl53l0x.title,/Infrared ToF/);
+ assert.match(devices.hcsr04.title,/Ultrasonic/);
+ assert.match(devices.mpu6050.title,/6-axis inertial/);
+ assert.match(devices.bno055.title,/9-axis orientation/);
+ for(const device of [devices.l298n,devices.tb6612]){
+  assert.match(device.title,/motor driver/);
+  assert.match(translateText(device.title,"es"),/Driver de motores/);
+ }
+ assert.equal(translateText(devices.vl53l0x.title,"es"),"Sensor de distancia infrarrojo ToF · VL53L0Xv2");
+ assert.equal(translateText(devices.joystick.title,"es"),"Joystick analógico de 2 ejes");
 });

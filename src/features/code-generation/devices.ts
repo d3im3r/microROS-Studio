@@ -1,12 +1,13 @@
 import { boardProfile, type BoardProfile, devices, type DeviceEntity, type Project, type DeviceDefinition } from "../program";
+import { pinName } from "./pins";
 import { cppString } from "./strings";
 import type { Fragment } from "./robot";
 export function pwmAssignments(p: Project): number[][] {
   let servo = 0, pwm = 2;
   return p.entities.map(e=> e.kind === "robot"&&e.behavior === "motor-pwm" ? [pwm++] : e.kind !== "device" ? [] : devices[e.device].pins.filter(r=>r.mode === "pwm").map(()=>e.device === "servo" ? servo++ : pwm++));
 }
-export function deviceFragment(e: DeviceEntity, i: number, channels: number[], board: BoardProfile = boardProfile("denky32")): Fragment {
- const d: DeviceDefinition=devices[e.device], p=e.pins, pub=d.direction==="publisher", pkg=["Vector3","Twist"].includes(d.message)?"geometry_msgs":"std_msgs";
+export function deviceFragment(e: DeviceEntity, i: number, channels: number[], board: BoardProfile = boardProfile("denky32"), instance = 1): Fragment {
+ const d: DeviceDefinition=devices[e.device], p=Object.fromEntries(d.pins.map(role=>[role.key,pinName(e,instance,role.key)])), pub=d.direction==="publisher", pkg=["Vector3","Twist"].includes(d.message)?"geometry_msgs":"std_msgs";
  const f:Fragment={includes:[`#include <${pkg}/msg/${d.message.toLowerCase()}.h>`,"#include <math.h>"],dependencies:[],declarations:`${pkg}__msg__${d.message} msg_${i};\n${pub?`rcl_publisher_t pub_${i};\nrcl_timer_t timer_${i};`:`rcl_subscription_t sub_${i};`}`,hardware:"",callbacks:"",loop:"",setup:pub?`    ok = ros.createPublisher(pub_${i}, ROSIDL_GET_MSG_TYPE_SUPPORT(${pkg}, msg, ${d.message}), ${cppString(e.topic)});\n    ros.require(ok, ${cppString(`Failed to create publisher ${e.topic}`)});\n    ok = ros.createTimer(timer_${i}, ${e.period}, timer_callback_${i});\n    ros.require(ok, ${cppString(`Failed to create timer ${e.topic}`)});`:`    ok = ros.createSubscription(sub_${i}, ROSIDL_GET_MSG_TYPE_SUPPORT(${pkg}, msg, ${d.message}), ${cppString(e.topic)}, &msg_${i}, subscription_callback_${i});\n    ros.require(ok, ${cppString(`Failed to create subscriber ${e.topic}`)});`};
  const timer=(body:string)=>`void timer_callback_${i}(rcl_timer_t * timer, int64_t last_call_time) {\n    (void) last_call_time;\n    if (!timer) return;\n${body}\n    if (!ros.publish(pub_${i}, &msg_${i})) ros.info(${cppString(`Failed to publish ${e.topic}`)});\n}`;
  const callback=(body:string)=>`void subscription_callback_${i}(const void * input) {\n    if (!input) return;\n    const auto * msg = static_cast<const ${pkg}__msg__${d.message} *>(input);\n${body}\n}`;
@@ -18,12 +19,12 @@ export function deviceFragment(e: DeviceEntity, i: number, channels: number[], b
   f.callbacks=timer(`    msg_${i}.data = analogRead(${p.signal});`);
  }
  if(e.device==="digital-input"){
-  f.hardware=`    pinMode(${p.signal}, ${board.family==="esp32"&&p.signal>=34?"INPUT":"INPUT_PULLUP"});`;
+  f.hardware=`    pinMode(${p.signal}, ${board.family==="esp32"&&e.pins.signal>=34?"INPUT":"INPUT_PULLUP"});`;
   f.callbacks=timer(`    msg_${i}.data = digitalRead(${p.signal}) ${e.activeLow?"== LOW":"== HIGH"};`);
  }
  if(e.device==="joystick"){
-  f.hardware=`    analogReadResolution(12);\n    pinMode(${p.x}, INPUT); pinMode(${p.y}, INPUT);\n    pinMode(${p.button}, ${board.family==="esp32"&&p.button>=34?"INPUT":"INPUT_PULLUP"});`;
-  f.callbacks=timer(`    msg_${i}.x = analogRead(${p.x}); msg_${i}.y = analogRead(${p.y});\n    msg_${i}.z = digitalRead(${p.button}) == LOW ? 1.0 : 0.0;`);
+  f.hardware=`    analogReadResolution(12);\n    pinMode(${p.x}, INPUT); pinMode(${p.y}, INPUT);\n${e.pins.button===-1?"":`    pinMode(${p.button}, ${board.family==="esp32"&&e.pins.button>=34?"INPUT":"INPUT_PULLUP"});`}`;
+  f.callbacks=timer(`    msg_${i}.x = analogRead(${p.x}); msg_${i}.y = analogRead(${p.y});\n    msg_${i}.z = ${e.pins.button===-1?"0.0":`digitalRead(${p.button}) == LOW ? 1.0 : 0.0`};`);
  }
  if(e.device==="hcsr04"){
   f.hardware=`    pinMode(${p.trigger}, OUTPUT); digitalWrite(${p.trigger}, LOW);\n    pinMode(${p.echo}, INPUT);`;
@@ -33,7 +34,7 @@ export function deviceFragment(e: DeviceEntity, i: number, channels: number[], b
   f.includes.push("#include <Adafruit_VL53L0X.h>");f.dependencies.push("adafruit/Adafruit_VL53L0X");
   f.declarations+=`\nAdafruit_VL53L0X sensor_${i};`;
   // All XSHUT pins are first held LOW by the project generator.
-  f.hardware=`    digitalWrite(${p.xshut}, HIGH); delay(100);\n    ros.require(sensor_${i}.begin(${e.address}), "VL53L0X not found; check XSHUT/address");`;
+  f.hardware=`${e.pins.xshut===-1?"":`    digitalWrite(${p.xshut}, HIGH); delay(100);\n`}    ros.require(sensor_${i}.begin(${e.address}), "VL53L0X not found; check XSHUT/address");`;
   f.callbacks=timer(`    VL53L0X_RangingMeasurementData_t reading;\n    sensor_${i}.rangingTest(&reading, false);\n    msg_${i}.data = reading.RangeStatus == 0 ? reading.RangeMilliMeter / 1000.0f : -1.0f;`);
  }
  if(e.device==="bno055"){
@@ -57,7 +58,7 @@ export function deviceFragment(e: DeviceEntity, i: number, channels: number[], b
  if(e.device==="encoder"){
   f.declarations+=`\nvolatile uint32_t ticks_${i} = 0;\nportMUX_TYPE mux_${i} = portMUX_INITIALIZER_UNLOCKED;`;
   f.callbacks=`void IRAM_ATTR encoder_isr_${i}() {\n    const bool different = digitalRead(${p.a}) != digitalRead(${p.b});\n    portENTER_CRITICAL_ISR(&mux_${i});\n    ticks_${i} += different ? ${e.activeLow?"-1 : 1":"1 : -1"};\n    portEXIT_CRITICAL_ISR(&mux_${i});\n}\n`+timer(`    portENTER_CRITICAL(&mux_${i});\n    msg_${i}.data = static_cast<int32_t>(ticks_${i});\n    portEXIT_CRITICAL(&mux_${i});`);
-  f.hardware=`    pinMode(${p.a}, ${board.family==="esp32"&&p.a>=34?"INPUT":"INPUT_PULLUP"}); pinMode(${p.b}, ${board.family==="esp32"&&p.b>=34?"INPUT":"INPUT_PULLUP"});\n    attachInterrupt(digitalPinToInterrupt(${p.a}), encoder_isr_${i}, CHANGE);`;
+  f.hardware=`    pinMode(${p.a}, ${board.family==="esp32"&&e.pins.a>=34?"INPUT":"INPUT_PULLUP"}); pinMode(${p.b}, ${board.family==="esp32"&&e.pins.b>=34?"INPUT":"INPUT_PULLUP"});\n    attachInterrupt(digitalPinToInterrupt(${p.a}), encoder_isr_${i}, CHANGE);`;
  }
  if(["led","digital-output","active-buzzer"].includes(e.device)){
   f.hardware=`    pinMode(${p.signal}, OUTPUT); digitalWrite(${p.signal}, ${e.activeLow?"HIGH":"LOW"});`;
@@ -92,7 +93,7 @@ export function deviceFragment(e: DeviceEntity, i: number, channels: number[], b
   f.callbacks=callback(`    screen_${i}.showNumberDec(constrain(msg->data, -999, 9999));`);
  }
  if(e.device==="l298n"||e.device==="tb6612"){
-  const tb=e.device==="tb6612";
+  const tb=e.device==="tb6612"&&e.pins.standby!==-1;
   f.declarations+=`\nuint32_t motor_time_${i} = 0;\nbool motor_forward_${i}[2] = {true,true};`;
   const stop=`void stop_device_${i}() {\n    ledcWrite(${channels[0]}, 0); ledcWrite(${channels[1]}, 0);\n    digitalWrite(${p.in1}, LOW); digitalWrite(${p.in2}, LOW); digitalWrite(${p.in3}, LOW); digitalWrite(${p.in4}, LOW);\n${tb?`    digitalWrite(${p.standby}, LOW);`:""}\n}`;
   f.callbacks=stop+`\nvoid drive_device_${i}(double command, int in1, int in2, int channel, int side) {\n    const bool forward = command >= 0.0;\n    if (forward != motor_forward_${i}[side]) { ledcWrite(channel, 0); delayMicroseconds(300); }\n    motor_forward_${i}[side] = forward;\n    digitalWrite(in1, command == 0.0 ? LOW : (forward ? HIGH : LOW));\n    digitalWrite(in2, command == 0.0 ? LOW : (forward ? LOW : HIGH));\n    ledcWrite(channel, static_cast<uint32_t>(fabs(command) * 255.0 / 100.0));\n}\n`+callback(`    motor_time_${i} = millis();\n    if (!isfinite(msg->x) || !isfinite(msg->y)) { stop_device_${i}(); return; }\n    const double a = constrain(msg->x, -100.0, 100.0), b = constrain(msg->y, -100.0, 100.0);\n${tb?`    digitalWrite(${p.standby}, (a == 0.0 && b == 0.0) ? LOW : HIGH);`:""}\n    drive_device_${i}(a, ${p.in1}, ${p.in2}, ${channels[0]}, 0);\n    drive_device_${i}(b, ${p.in3}, ${p.in4}, ${channels[1]}, 1);`);

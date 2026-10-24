@@ -5,7 +5,7 @@ const KEY = "microros-studio-v1";
 export function useProject() {
   const [project, setProject] = useState<Project>(defaultProject);
   const [ready, setReady] = useState(false);
-  const [storageStatus, setStorageStatus] = useState("Cargando proyecto…");
+  const [storageStatus, setStorageStatus] = useState("Loading project…");
   useEffect(() => {
     try {
       const saved = localStorage.getItem(KEY);

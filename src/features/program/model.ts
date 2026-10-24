@@ -54,6 +54,8 @@ export const projectSchema = z.object({
   const hasVl = p.entities.some(e => e.kind === "device" && e.device === "vl53l0x");
   const hasLegacyTof = p.entities.some(e => e.kind === "robot" && e.behavior === "tof-triple");
   if (hasVl && hasLegacyTof) ctx.addIssue({ code: "custom", message: "Replace the triple ToF block with individual VL53L0X sensors to coordinate XSHUT and addresses." });
+  const vlSensors=p.entities.filter(e=>e.kind==="device"&&e.device==="vl53l0x");
+  for(const e of vlSensors){if(e.kind!=="device")continue;if(e.pins.xshut===-1&&(vlSensors.length>1||e.address!==0x29))ctx.addIssue({code:"custom",message:"VL53L0X: without XSHUT, use a single sensor at address 0x29. Multiple sensors require separate XSHUT pins."});}
   let pubs = 0, subs = 0, generalPwm = 0, servos = 0;
   p.entities.forEach(e => {
     if (e.kind === "publisher") pubs++;
@@ -81,12 +83,12 @@ export const projectSchema = z.object({
     const title = e.kind === "device" ? devices[e.device].title : e.kind === "robot" ? robotDefinitions[e.behavior].title : e.kind === "subscriber" ? "LED / digital output" : "Publisher";
     const owner = `${title} (${e.topic})`;
     if(e.kind==="device"&&e.device==="touch"&&!boardPins(p.board,"touch").length)ctx.addIssue({code:"custom",path:["entities",i],message:`Touch unavailable on ${board.title}.`});
-    const used = e.kind === "device" ? devices[e.device].pins.map(role=>({pin:e.pins[role.key],label:role.label})) : (e.kind === "subscriber" ? [e.pin] : e.kind === "robot" ? robotPins(e) : []).map((pin,index)=>({pin,label:`pin ${index+1}`}));
+    const used = e.kind === "device" ? devices[e.device].pins.filter(role=>!(role.optional&&e.pins[role.key]===-1)).map(role=>({pin:e.pins[role.key],label:role.label})) : (e.kind === "subscriber" ? [e.pin] : e.kind === "robot" ? robotPins(e) : []).map((pin,index)=>({pin,label:`pin ${index+1}`}));
     for (const {pin,label} of used) {
       const current = `${owner} · ${label}`;
       const mode = e.kind === "device" ? devices[e.device].pins.find(role=>role.label===label)!.mode : e.kind === "robot" && e.behavior === "wheel-encoders" ? "input" : "output";
-      if (!boardPins(p.board, mode).includes(pin)) ctx.addIssue({code:"custom",path:["entities",i],message:`${current}: GPIO ${pin} unavailable for ${mode === "adc" ? "ADC1" : mode === "input" ? "input" : "output"} en ${board.title}.`});
-      if (pins.has(pin)) ctx.addIssue({ code: "custom", path: ["entities", i], message: `GPIO ${pin} conflict: ${pinOwners.get(pin) ?? "reserved resource"} y ${current}. Assign a different GPIO.` });
+      if (!boardPins(p.board, mode).includes(pin)) ctx.addIssue({code:"custom",path:["entities",i],message:`${current}: GPIO ${pin} unavailable for ${mode === "adc" ? "ADC1" : mode === "input" ? "input" : "output"} on ${board.title}.`});
+      if (pins.has(pin)) ctx.addIssue({ code: "custom", path: ["entities", i], message: `GPIO ${pin} conflict: ${pinOwners.get(pin) ?? "reserved resource"} and ${current}. Assign a different GPIO.` });
       else pinOwners.set(pin,current);
       pins.add(pin);
     }

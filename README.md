@@ -3,7 +3,7 @@
     <source media="(prefers-color-scheme: dark)" srcset="public/brand/d3im3r/horizontal-dark.svg" />
     <img src="public/brand/d3im3r/horizontal-light.svg" alt="d3im3r owl-chip signature" width="360" />
   </picture>
-  <h1>microROS Studio</h1>
+  <h1>microROS Studio · Beta 0.2</h1>
   <p>An interactive micro-ROS firmware builder for ESP32 boards.</p>
   <p>Created by <a href="https://github.com/d3im3r">d3im3r</a></p>
   <p>
@@ -36,9 +36,33 @@ Build a micro-ROS application through a guided hardware wizard and a visual prog
 - Generated C++ and INI previews with copy, download and expanded code view.
 - Light/dark mode and Default, invincible theme and Clean Slate palettes.
 - Browser-local drafts; WiFi passwords are excluded from saved drafts.
-- English labels, descriptions, validation messages and generated diagnostics.
+- English/Spanish interface with a persistent language toggle; generated firmware and suggested identifiers stay in English.
+- Optional joystick button, VL53L0X XSHUT and TB6612FNG STBY pins.
+- Named GPIO constants for all hardware profiles, including the shared I2C bus.
 
 The starter program publishes `/counter` every second and subscribes to `/led` using `std_msgs/Bool`. Suggested node names end in `_node`, and topics start with `/`. The UDP Agent port is fixed at **8888**.
+
+## Beta 0.2
+
+Use the **EN / ES** button in the header to change the interface language. The preference is stored in your browser. Switching languages preserves your draft, project name, node name, topics and generated firmware.
+
+Choose **Not connected** in an optional pin selector to release that GPIO:
+
+- **Joystick button:** only the X/Y axes are read; message `z` stays at `0`.
+- **VL53L0X XSHUT:** available for one sensor at the default `0x29` address. Multiple sensors require separate XSHUT GPIOs for safe startup address assignment.
+- **TB6612FNG STBY:** wire STBY high externally when it is not GPIO-controlled. The generated watchdog still stops PWM and direction outputs.
+
+Catalog names identify the sensing technology or actuator function, alongside the model. Labels distinguish infrared ToF from ultrasonic distance sensors, 6-axis from 9-axis inertial sensors, and motor drivers from motors.
+
+Firmware constants use the device type and a per-type instance number, independent of topic names or unrelated blocks. For example:
+
+```cpp
+const uint8_t led1 = 2;
+pinMode(led1, OUTPUT);
+
+const uint8_t driver_tb1_IN4 = 16;
+pinMode(driver_tb1_IN4, OUTPUT);
+```
 
 ## Run locally
 
@@ -106,38 +130,38 @@ Changing the board preserves existing GPIO assignments and reports incompatible 
 
 | Device | Published data |
 | --- | --- |
-| Capacitive touch pin | Int32 raw reading; ESP32 decreases on touch, S3 increases |
-| Internal chip temperature | Float32 °C from the silicon, not ambient temperature |
+| Capacitive touch input | Int32 raw reading; ESP32 decreases on touch, S3 increases |
+| Internal temperature sensor | Float32 °C from the silicon, not ambient temperature |
 | LM35 | Float32 °C, calibrated ADC millivolts / 10 |
-| VL53L0Xv2 | Float32 meters; -1 for invalid readings |
-| HC-SR04 | Float32 meters; -1 for no echo, 25 ms timeout |
-| MPU-6050 | Vector3 acceleration x/y/z in m/s² |
-| BNO055 | Float32 yaw in radians |
+| Infrared ToF distance sensor · VL53L0Xv2 | Float32 meters; -1 for invalid readings |
+| Ultrasonic distance sensor · HC-SR04 | Float32 meters; -1 for no echo, 25 ms timeout |
+| 6-axis inertial sensor · MPU-6050 | Vector3 acceleration x/y/z in m/s² |
+| 9-axis orientation sensor · BNO055 | Float32 yaw in radians |
 | Incremental quadrature encoder | Int32 signed count |
-| Potentiometer | Int32 12-bit ADC1, 0–4095 |
-| DHT11 | Vector3 temperature / humidity / validity |
-| Analog joystick | Vector3 ADC x / ADC y / button |
-| Generic analog input | Int32 ADC1 reading |
-| Generic digital input | Bool logic level |
+| Analog position input · Potentiometer | Int32 12-bit ADC1, 0–4095 |
+| Temperature and humidity sensor · DHT11 | Vector3 temperature / humidity / validity |
+| 2-axis analog joystick | Vector3 ADC x / ADC y / button |
+| Generic analog input · ADC | Int32 ADC1 reading |
+| Generic digital input · GPIO | Bool logic level |
 
 ### Outputs and actuators
 
 | Device | Received command |
 | --- | --- |
 | Active buzzer | Bool on/off |
-| 16×2 I²C LCD | Int32 displayed value; PCF8574/PCF8574A |
+| I2C character LCD · 16×2 | Int32 displayed value; PCF8574/PCF8574A |
 | 28BYJ-48 + ULN2003 | Int32 absolute half-step target; nonblocking motion |
-| MAX7219 LED matrix | Int32 0–64 lit LEDs on one FC-16 8×8 module |
-| Servo motor | Int32 0–180°; 50 Hz PWM |
-| LED | Bool on/off |
-| RGB LED | Vector3 red/green/blue, 0–255 |
+| LED matrix + driver · MAX7219 | Int32 0–64 lit LEDs on one FC-16 8×8 module |
+| PWM servo motor | Int32 0–180°; 50 Hz PWM |
+| LED · Digital output | Bool on/off |
+| RGB LED · PWM | Vector3 red/green/blue, 0–255 |
 | SSD1306 OLED | Int32 value on a 128×64 I2C display |
 | SH1106/SH110x OLED | Int32 value using a 128×64 SH1106G profile |
-| TM1637 4-digit display | Int32 -999 to 9999; dedicated CLK/DIO |
-| L298N | Vector3 signed motor A/B percentages; z reserved |
-| TB6612FNG driver | Vector3 signed motor A/B percentages; STBY and watchdog |
-| Generic digital output | Bool state with configurable polarity |
-| Generic analog PWM output | Int32 duty cycle, 0–255 at 1 kHz |
+| 4-digit LED display · TM1637 | Int32 -999 to 9999; dedicated CLK/DIO |
+| Dual H-bridge motor driver · L298N | Vector3 signed motor A/B percentages; z reserved |
+| Dual H-bridge motor driver · TB6612FNG | Vector3 signed motor A/B percentages; STBY and watchdog |
+| Generic digital output · GPIO | Bool state with configurable polarity |
+| Generic PWM output | Int32 duty cycle, 0–255 at 1 kHz |
 
 Profiles provide starting configurations. Check module voltage, wiring, address jumpers and device notes. LM35, touch and analog profiles are disabled where the board does not expose the required pins. Touch is unavailable on C3 and this TTGO profile.
 
@@ -206,6 +230,7 @@ src/
 │   ├── export-files/     # File downloads
 │   ├── help/             # Device help and deployment instructions
 │   ├── project/          # Browser-local draft persistence
+│   ├── language/         # Persistent English/Spanish interface preference
 │   ├── theme/            # Palette and light/dark preferences
 │   ├── robot-catalog/    # Compatibility with early saved blocks
 │   └── workspace/        # Application composition

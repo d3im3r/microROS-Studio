@@ -1,4 +1,6 @@
 "use client";
+import { useLanguage } from "../language";
+
 import { useEffect, useRef, useState } from "react";
 import { Background, Panel, PanOnScrollMode, Handle, Position, ReactFlow, applyNodeChanges, type Node, type NodeProps, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
 import { Radio, Timer, Cpu, Lightbulb, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus } from "lucide-react";
@@ -8,17 +10,19 @@ import { entityDirection, entityMessage, entityTitle, devices } from "../program
 import type { Project } from "../program";
 
 function ProgramNode({ data, selected }: NodeProps) {
+  const { translate } = useLanguage();
   const kind = data.kind as string;
   const Icon = kind === "timer" ? Timer : kind === "gpio" ? Lightbulb : kind === "node" ? Cpu : Radio;
   const color = kind === "subscriber" || kind === "gpio" ? "var(--diagram-output-accent, var(--secondary))" : "var(--ring)";
   return <div style={{ borderColor: selected ? color : "var(--border)", width: 214 }} className="border bg-card shadow-xl">
     {kind !== "timer" && kind !== "subscriber" && <Handle type="target" position={Position.Left} />}
-    <div className="flex items-center gap-2 border-b border-border px-4 py-3"><Icon size={15} style={{ color }} /><span className="text-[10px] font-bold tracking-widest" style={{ color }}>{String(data.label)}</span></div>
-    <div className="px-4 py-3"><div className="mono text-sm text-foreground">{String(data.title)}</div><div className="mt-1.5 break-words text-[11px] text-muted-foreground">{String(data.detail)}</div></div>
+    <div className="flex items-center gap-2 border-b border-border px-4 py-3"><Icon size={15} style={{ color }} /><span className="text-[10px] font-bold tracking-widest" style={{ color }}>{translate(String(data.label))}</span></div>
+    <div className="px-4 py-3"><div className="mono text-sm text-foreground">{translate(String(data.title))}</div><div className="mt-1.5 break-words text-[11px] text-muted-foreground">{translate(String(data.detail))}</div></div>
     {kind !== "gpio" && kind !== "publisher" && kind !== "node" && <Handle type="source" position={Position.Right} />}
   </div>;
 }
 export function VisualEditor({ project, selected, onSelect }: { project: Project; selected: string | null; onSelect: (id: string | null) => void }) {
+  const { translate } = useLanguage();
   const { theme } = useTheme();
   // Keep the registry stable across renders and development Fast Refresh.
   const [nodeTypes] = useState(() => ({ program: ProgramNode }));
@@ -114,23 +118,23 @@ export function VisualEditor({ project, selected, onSelect }: { project: Project
       next.push({ id: entity.id, type: "program", position: { x: pub ? 380 : 55, y }, selected: entity.id === selected,
         data: { kind: pub ? "publisher" : "subscriber", label: pub ? "PUBLISHER" : "SUBSCRIBER", title: entity.topic, detail: `${["Vector3", "Twist"].includes(entityMessage(entity)) ? "geometry_msgs" : "std_msgs"} / ${entityMessage(entity)}` } });
       next.push({ id: `${entity.id}:behavior`, type: "program", position: { x: pub ? 55 : 380, y },
-        data: entity.kind === "device" ? { kind: pub ? "timer" : "gpio", label: pub ? "INPUT + TIMER" : "OUTPUT", title: entityTitle(entity), detail: entity.address !== undefined ? `I2C 0x${entity.address.toString(16).toUpperCase()}` : devices[entity.device].pins.map(role=>`${role.label}: ${entity.pins[role.key]}`).join(" · ") } : entity.kind === "robot" ? {kind:pub?"timer":"gpio",label:"BEHAVIOR",title:entityTitle(entity),detail:entity.behavior === "differential"?`→ ${entity.outputTopic}`:pub?`${entity.period} ms`:`Watchdog ${entity.timeout} ms`} : entity.kind === "publisher" ? {kind:"timer",label:"TIMER + BEHAVIOR",title:`${entity.period} ms`,detail:entity.behavior === "counter"?"Counter · 1, 2, 3…":"Publish message"} : {kind:"gpio",label:"DIGITAL OUTPUT",title:`GPIO ${entity.pin}`,detail:"true: on · false: off"} });
+        data: entity.kind === "device" ? { kind: pub ? "timer" : "gpio", label: pub ? "INPUT + TIMER" : "OUTPUT", title: entityTitle(entity), detail: entity.address !== undefined ? `I2C 0x${entity.address.toString(16).toUpperCase()}` : devices[entity.device].pins.map(role=>`${role.label}: ${entity.pins[role.key]===-1?"Not connected":entity.pins[role.key]}`).join(" · ") } : entity.kind === "robot" ? {kind:pub?"timer":"gpio",label:"BEHAVIOR",title:entityTitle(entity),detail:entity.behavior === "differential"?`→ ${entity.outputTopic}`:pub?`${entity.period} ms`:`Watchdog ${entity.timeout} ms`} : entity.kind === "publisher" ? {kind:"timer",label:"TIMER + BEHAVIOR",title:`${entity.period} ms`,detail:entity.behavior === "counter"?"Counter · 1, 2, 3…":"Publish message"} : {kind:"gpio",label:"DIGITAL OUTPUT",title:`GPIO ${entity.pin}`,detail:"true: on · false: off"} });
     });
     if (!next.length) next.push({ id: "empty", type: "program", position: { x: 210, y: 140 }, data: { kind: "node", label: "ROS 2 NODE", title: project.nodeName, detail: "Add an entity to get started" } });
     setNodes(previous => next.map(n => ({ ...n, position: previous.find(p => p.id === n.id)?.position ?? n.position })));
   }, [project, selected]);
   const edges = project.entities.map(e => ({ id: `edge-${e.id}`, source: (entityDirection(e) === "publisher") ? `${e.id}:behavior` : e.id, target: (entityDirection(e) === "publisher") ? e.id : `${e.id}:behavior`, animated: true, style: { stroke: (entityDirection(e) === "publisher") ? "var(--ring)" : "var(--diagram-output-accent, var(--secondary))" } }));
   function change(changes: NodeChange[]) { setNodes(n => applyNodeChanges(changes, n)); }
-  return <div ref={container} data-expanded={expanded} aria-label="Program diagram" className={expanded ? "diagram-fullscreen bg-card" : "absolute inset-0 min-h-0 min-w-0 bg-card"}>
+  return <div ref={container} data-expanded={expanded} aria-label={translate("Program diagram")} className={expanded ? "diagram-fullscreen bg-card" : "absolute inset-0 min-h-0 min-w-0 bg-card"}>
   {size.width > 0 && size.height > 0 && <ReactFlow style={{ width: size.width, height: size.height }} onInit={setFlow} onMove={(_,viewport)=>setZoom(viewport.zoom)} panOnScroll panOnScrollMode={PanOnScrollMode.Vertical} zoomOnScroll={false} zoomOnPinch zoomActivationKeyCode="Control" preventScrolling nodes={nodes} edges={edges} onNodesChange={change} nodeTypes={nodeTypes} onNodeClick={(_, n) => onSelect(n.id.replace(":behavior", ""))} onPaneClick={() => onSelect(null)} nodesConnectable={false} deleteKeyCode={null} fitView minZoom={.08} maxZoom={2} colorMode={theme}>
     <Background color="var(--border)" gap={22} size={1} />
-    <Panel position="bottom-right" style={{ left: "auto", right: 8, top: "auto", bottom: 8, margin: 0 }}><div role="group" aria-label="Diagram controls" className="flex items-center gap-1 rounded-lg border border-border bg-card/95 p-1 shadow-sm"><div className="flex items-center gap-1">
-      <Button variant="ghost" size="icon" aria-label="Zoom in diagram" title="Zoom in" disabled={!flow || zoom >= 2} onClick={()=>void flow?.zoomIn({duration:150})}><ZoomIn/></Button>
-      <Button variant="ghost" size="icon" aria-label="Zoom out diagram" title="Zoom out" disabled={!flow || zoom <= .08} onClick={()=>void flow?.zoomOut({duration:150})}><ZoomOut/></Button>
-      <span aria-label="Zoom level" className="mono min-w-10 text-center text-xs text-muted-foreground">{Math.round(zoom*100)}%</span></div>
-      <Button variant="ghost" size="icon" aria-label="Fit diagram" title="Fit all blocks" onClick={()=>void flow?.fitView({padding:.18,minZoom:.08,maxZoom:1.5,duration:200})}><Focus/></Button>
-      <Button variant="ghost" size="icon" aria-label={expanded?"Exit fullscreen":"Fullscreen diagram"} title={expanded?"Exit fullscreen (Esc)":"Fullscreen"} onClick={()=>void toggleFullscreen()}>{expanded?<Minimize2/>:<Maximize2/>}</Button>
+    <Panel position="bottom-right" style={{ left: "auto", right: 8, top: "auto", bottom: 8, margin: 0 }}><div role="group" aria-label={translate("Diagram controls")} className="flex items-center gap-1 rounded-lg border border-border bg-card/95 p-1 shadow-sm"><div className="flex items-center gap-1">
+      <Button variant="ghost" size="icon" aria-label={translate("Zoom in diagram")} title={translate("Zoom in")} disabled={!flow || zoom >= 2} onClick={()=>void flow?.zoomIn({duration:150})}><ZoomIn/></Button>
+      <Button variant="ghost" size="icon" aria-label={translate("Zoom out diagram")} title={translate("Zoom out")} disabled={!flow || zoom <= .08} onClick={()=>void flow?.zoomOut({duration:150})}><ZoomOut/></Button>
+      <span aria-label={translate("Zoom level")} className="mono min-w-10 text-center text-xs text-muted-foreground">{translate(Math.round(zoom*100))}{translate("%")}</span></div>
+      <Button variant="ghost" size="icon" aria-label={translate("Fit diagram")} title={translate("Fit all blocks")} onClick={()=>void flow?.fitView({padding:.18,minZoom:.08,maxZoom:1.5,duration:200})}><Focus/></Button>
+      <Button variant="ghost" size="icon" aria-label={translate(expanded?"Exit fullscreen":"Fullscreen diagram")} title={translate(expanded?"Exit fullscreen (Esc)":"Fullscreen")} onClick={()=>void toggleFullscreen()}>{expanded?<Minimize2/>:<Maximize2/>}</Button>
     </div></Panel>
-    <Panel position="top-right" className="pointer-events-none !m-2"><span className="block max-w-[calc(100vw-48px)] rounded bg-card/90 px-2 py-1 text-right text-[10px] text-muted-foreground">Scroll ↑↓ · Ctrl + scroll: zoom · Shift + scroll ↔</span></Panel>
+    <Panel position="top-right" className="pointer-events-none !m-2"><span className="block max-w-[calc(100vw-48px)] rounded bg-card/90 px-2 py-1 text-right text-[10px] text-muted-foreground">{translate("Scroll ↑↓ · Ctrl + scroll: zoom · Shift + scroll ↔")}</span></Panel>
   </ReactFlow>}</div>;
 }
