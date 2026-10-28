@@ -26,7 +26,7 @@
   </p>
 </div>
 
-Build a micro-ROS application through a guided hardware wizard and a visual program diagram. Download **only `platformio.ini` and `main.cpp`**, then use them with the [base firmware project](https://github.com/d3im3r/esp32-microros-template).
+Build a micro-ROS application through a guided hardware wizard and a visual program diagram. Download **only `platformio.ini` and `main.cpp`**, then use them with the [base firmware project](https://github.com/d3im3r/microROS-Studio/releases/download/v1.0.0/esp32-microros-template.zip).
 
 ![microROS Studio Beta 0.3 editor in English](docs/studio-preview.png)
 
@@ -99,7 +99,7 @@ Open [localhost:3000](http://localhost:3000). Without nvm, install Node.js 22 di
 4. **Outputs and actuators:** choose outputs and configure GPIOs, addresses and polarity.
 5. **Review and generate:** resolve resource conflicts, inspect the code and download both files. **Next steps** opens the base-project and Agent instructions.
 
-Clone or download the [base firmware repository](https://github.com/d3im3r/esp32-microros-template), then replace:
+Download and extract the [base firmware template ZIP](https://github.com/d3im3r/microROS-Studio/releases/download/v1.0.0/esp32-microros-template.zip), then replace:
 
 ```text
 base-firmware/
