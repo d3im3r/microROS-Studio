@@ -5,9 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Download, FileCode2, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { downloadFile } from "../export-files";
-export function CodePreview({ files }: { files: { main: string; ini: string } | null }) {
+export function CodePreview({ files, platformioEnabled = false }: { files: { main: string; ini: string } | null; platformioEnabled?: boolean }) {
   const { translate } = useLanguage();
-  const [tab, setTab] = useState<"main" | "ini">("main");
+  const [selectedTab, setTab] = useState<"main" | "ini">("main");
+  const tab = platformioEnabled ? selectedTab : "main";
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -31,7 +32,7 @@ export function CodePreview({ files }: { files: { main: string; ini: string } | 
   }
   const panel = <section className={expanded ? "flex h-full min-h-0 min-w-0 flex-col bg-card" : "min-w-0 border-t border-border bg-card"}>
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-2 border-b border-border px-2 sm:px-4">
-      <div className="flex min-w-0 max-w-full">{(["main", "ini"] as const).map(t => <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-2 min-w-0 border-b-2 px-2 py-3 text-xs sm:px-4 ${tab === t ? "border-primary text-secondary dark:text-primary" : "border-transparent text-muted-foreground"}`}><FileCode2 size={14} />{translate(t === "main" ? "main.cpp" : "platformio.ini")}</button>)}</div>
+      <div className="flex min-w-0 max-w-full">{(["main", ...(platformioEnabled ? ["ini" as const] : [])] as const).map(t => <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-2 min-w-0 border-b-2 px-2 py-3 text-xs sm:px-4 ${tab === t ? "border-primary text-secondary dark:text-primary" : "border-transparent text-muted-foreground"}`}><FileCode2 size={14} />{translate(t === "main" ? "main.cpp" : "platformio.ini")}</button>)}</div>
       <div className="flex min-w-0 flex-wrap gap-1"><Button variant="ghost" size="sm" disabled={!files} onClick={copy}>{copied ? <Check /> : <Copy />}{translate(copied ? "Copied" : "Copy")}</Button><Button variant="ghost" size="sm" disabled={!files} onClick={() => downloadFile(name, code)}><Download />{translate("Download")}</Button><Button ref={expandButton} variant="ghost" size="icon" aria-label={translate(expanded ? "Restore code panel size" : "Maximize code")} title={translate(expanded ? "Restore size (Esc)" : "Maximize code")} onClick={() => setExpanded(value => !value)}>{expanded ? <Minimize2 /> : <Maximize2 />}</Button></div>
     </div>
     {error && <p role="alert" className="px-4 text-foreground">{translate(error)}</p>}

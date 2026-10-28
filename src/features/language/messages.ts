@@ -1,6 +1,10 @@
 export type Language = "en" | "es";
 
 const spanish: Record<string, string> = {
+  "Place main.cpp inside src/. Enter your network credentials and Agent IP.": "Coloca main.cpp dentro de src/. Introduce las credenciales de red y la IP del Agent.",
+  "Advanced export options": "Opciones avanzadas de exportación",
+  "Enable platformio.ini": "Habilitar platformio.ini",
+  "Download the base project from GitHub and replace src/main.cpp.": "Descarga el proyecto base desde GitHub y reemplaza src/main.cpp.",
   "Passive buzzer · Frequency tones": "Buzzer pasivo · Tonos por frecuencia",
   "Buzzer PWM signal": "Señal PWM del buzzer",
   "Frequency command in Hz (100–10000); 0 silences the buzzer. Starts silent. Out-of-range commands silence the output and report an error.": "Comando de frecuencia en Hz (100–10000); 0 silencia el buzzer. Inicia en silencio. Los comandos fuera de rango silencian la salida y notifican un error.",

@@ -20,6 +20,9 @@ test("configures, validates and downloads only the firmware files", async ({ pag
   expect(main.suggestedFilename()).toBe("main.cpp");
   const mainContent = await (await main.createReadStream())!.toArray();
   expect(Buffer.concat(mainContent).toString()).toContain("createTimer(timer_0, 500");
+  await expect(page.getByRole("button", { name: "platformio.ini", exact: true })).toHaveCount(0);
+  await page.getByLabel("Advanced export options").click();
+  await page.getByLabel("Enable platformio.ini").check();
   const iniDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "platformio.ini", exact: true }).first().click();
   expect((await iniDownload).suggestedFilename()).toBe("platformio.ini");
@@ -72,6 +75,8 @@ test("configures, validates and downloads only the firmware files", async ({ pag
 test("wizard: sensors, I2C, outputs and review", async ({ page }) => {
   const runtimeErrors:string[]=[];page.on("pageerror",e=>runtimeErrors.push(e.message));
   await page.goto("/");
+ await page.getByLabel("Advanced export options").click();
+ await page.getByLabel("Enable platformio.ini").check();
   const wizard=page.getByRole("complementary",{name:"micro-ROS application wizard"});
   await expect(wizard.getByText("Step 1 of 5")).toBeVisible();
   await wizard.getByRole("button",{name:"Next",exact:true}).click();
@@ -287,6 +292,8 @@ test("hides only code and restores it", async ({ page }) => {
 
 test("board selection, GPIO options, generation and persistence", async ({ page }) => {
  await page.goto("/");
+ await page.getByLabel("Advanced export options").click();
+ await page.getByLabel("Enable platformio.ini").check();
  const board=page.getByRole("combobox",{name:"Board",exact:true});
  await expect(board.locator("option")).toHaveText(["ESP32 Denky32","ESP32-CAM AI-Thinker","TTGO T-Camera ESP32-WROVER-B","Seeed Studio XIAO ESP32-S3 Sense · OV3660","ESP32-C3 SuperMini","ESP32 D1 Mini / ESP32-S"]);
  for(const id of ["esp32cam","ttgo-t-camera","seeed_xiao_esp32s3","esp32-c3-supermini","wemos_d1_mini32"]){
@@ -331,6 +338,8 @@ test("board selection, GPIO options, generation and persistence", async ({ page 
 
 test("maximizes code over the diagram and restores it", async ({page})=>{
  await page.goto("/");
+ await page.getByLabel("Advanced export options").click();
+ await page.getByLabel("Enable platformio.ini").check();
  const maximize=page.getByRole("button",{name:"Maximize code",exact:true});
  await maximize.click();
  const dialog=page.getByRole("dialog",{name:"Expanded code",exact:true});
@@ -362,6 +371,8 @@ test("maximizes code over the diagram and restores it", async ({page})=>{
 
 test("TTGO needs a valid external pin and XIAO identifies OV3660",async({page})=>{
  await page.goto("/");
+ await page.getByLabel("Advanced export options").click();
+ await page.getByLabel("Enable platformio.ini").check();
  const board=page.getByRole("combobox",{name:"Board",exact:true});
  await board.selectOption("ttgo-t-camera");
  await expect(page.getByRole("button",{name:"main.cpp",exact:true}).first()).toBeDisabled();
