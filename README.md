@@ -26,7 +26,7 @@
   </p>
 </div>
 
-Build a micro-ROS application through a guided hardware wizard and a visual program diagram. Download **only `platformio.ini` and `main.cpp`**, then use them with the [base firmware project](https://github.com/d3im3r/microROS-Studio/releases/download/v1.0.0/esp32-microros-template.zip).
+Build a micro-ROS application through a guided hardware wizard and a visual program diagram. Download **`main.cpp`**, then use them with the [base firmware project](https://github.com/d3im3r/microROS-Studio/releases/download/v1.0.0/esp32-microros-template.zip).
 
 ![microROS Studio Beta 0.3 editor in English](docs/studio-preview.png)
 
@@ -97,13 +97,13 @@ Open [localhost:3000](http://localhost:3000). Without nvm, install Node.js 22 di
 2. **Communication:** configure WiFi/UDP or Serial, the Agent IP and the shared I2C bus.
 3. **Inputs and sensors:** add devices and adjust their settings in Properties.
 4. **Outputs and actuators:** choose outputs and configure GPIOs, addresses and polarity.
-5. **Review and generate:** resolve resource conflicts, inspect the code and download both files. **Next steps** opens the base-project and Agent instructions.
+5. **Review and generate:** resolve resource conflicts, inspect the code and download `main.cpp`. **Next steps** opens the base-project and Agent instructions.
 
 Download and extract the [base firmware template ZIP](https://github.com/d3im3r/microROS-Studio/releases/download/v1.0.0/esp32-microros-template.zip), then replace:
 
 ```text
 base-firmware/
-├── platformio.ini         ← generated platformio.ini
+├── platformio.ini         ← keep and configure for your board and transport
 ├── src/
 │   └── main.cpp           ← generated main.cpp
 ├── include/
@@ -111,6 +111,8 @@ base-firmware/
 └── lib/
     └── micro_ros_platformio/ ← keep from the base project
 ```
+
+Advanced export: hover or focus the lower-right corner, open the settings control, and enable `platformio.ini` to preview, copy or download it. When keeping the base configuration, ensure its board, transport and peripheral dependencies match your program.
 
 Open the base project in PlatformIO, start the micro-ROS Agent, and build/upload locally. The web app generates source files; it does not compile, flash or connect to your robot.
 

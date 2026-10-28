@@ -1,6 +1,19 @@
 export type Language = "en" | "es";
 
 const spanish: Record<string, string> = {
+  "Download and extract esp32-microros-template.zip from release v1.0.0. This is the base firmware project for PlatformIO, Arduino and ROS 2 Humble.": "Descarga y extrae esp32-microros-template.zip del release v1.0.0. Es el proyecto base de firmware para PlatformIO, Arduino y ROS 2 Humble.",
+  "2. Generate main.cpp.": "2. Genera main.cpp.",
+  "Configure your program in microROS Studio and download main.cpp.": "Configura tu programa en microROS Studio y descarga main.cpp.",
+  "5. Configure and start the Agent.": "5. Configura e inicia el Agent.",
+  "For WiFi, enter your network credentials and Agent IP before downloading main.cpp. Install ROS 2 Humble and micro_ros_agent. Use the same ROS domain in the firmware, Agent and every ROS terminal. For Serial, adjust /dev/ttyUSB0 and close the monitor before connecting the Agent.": "Para WiFi, introduce las credenciales de red y la IP del Agent antes de descargar main.cpp. Instala ROS 2 Humble y micro_ros_agent. Usa el mismo dominio ROS en el firmware, el Agent y todas las terminales ROS. Para Serial, ajusta /dev/ttyUSB0 y cierra el monitor antes de conectar el Agent.",
+  "6. Build, upload and verify.": "6. Compila, carga y verifica.",
+  "Open the base project in PlatformIO and run Build → Upload. Start the Agent before the ESP32 initializes its ROS entities. For Serial, stop the Agent while uploading if it holds the port, then restart it and reset the board. Verify your node and topics with the commands below.": "Abre el proyecto base en PlatformIO y ejecuta Build → Upload. Inicia el Agent antes de que el ESP32 inicialice sus entidades ROS. Para Serial, detén el Agent durante la carga si ocupa el puerto; después reinícialo y reinicia la placa. Verifica el nodo y los topics con los comandos siguientes.",
+  "The web app generates the code. Compilation, upload and validation with hardware are performed locally.": "La aplicación web genera el código. La compilación, carga y validación con hardware se realizan localmente.",
+  "3. Replace src/main.cpp.": "3. Reemplaza src/main.cpp.",
+  "Replace src/main.cpp in the extracted template. Keep MicroROSHelper.h and the base project's dependencies.": "Reemplaza src/main.cpp en la plantilla extraída. Conserva MicroROSHelper.h y las dependencias del proyecto base.",
+  "4. Check PlatformIO.": "4. Revisa PlatformIO.",
+  "Check that platformio.ini matches your board, transport and peripheral libraries. To enable its preview, copy and download, hover or focus the lower-right corner, open the hidden settings control and enable platformio.ini.": "Comprueba que platformio.ini corresponda a tu placa, transporte y bibliotecas de periféricos. Para habilitar su vista previa, copia y descarga, pasa el cursor o enfoca la esquina inferior derecha, abre el control de ajustes oculto y habilita platformio.ini.",
+
   "Place main.cpp inside src/. Enter your network credentials and Agent IP.": "Coloca main.cpp dentro de src/. Introduce las credenciales de red y la IP del Agent.",
   "Advanced export options": "Opciones avanzadas de exportación",
   "Enable platformio.ini": "Habilitar platformio.ini",

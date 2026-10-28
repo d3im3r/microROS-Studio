@@ -25,7 +25,7 @@ export function BoardHelp({board}:{board:BoardId}) {
     <div className="grid min-w-0 gap-5 p-4 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
      <div className="min-w-0 space-y-4">
       <figure className="rounded-lg border border-border bg-background p-3">
-       {failed===board?<p role="status" className="p-6 text-sm text-muted-foreground">{translate("The board image could not be loaded.")}</p>:<a href={reference.image} target="_blank" rel="noreferrer" aria-label={translate("Open the full-size board image")}><Image key={board} src={reference.image} alt={translate(reference.alt)} width={1000} height={750} unoptimized onError={()=>setFailed(board)} className="h-auto max-h-[420px] w-full rounded object-contain"/></a>}
+       {failed===board?<p role="status" className="p-6 text-sm text-muted-foreground">{translate("The board image could not be loaded.")}</p>:<a href={reference.image} target="_blank" rel="noreferrer" aria-label={translate("Open the full-size board image")}><Image key={board} src={reference.preview ?? reference.image} alt={translate(reference.alt)} width={1000} height={750} unoptimized onError={()=>setFailed(board)} className="h-auto max-h-[420px] w-full rounded object-contain"/></a>}
        <figcaption className="mt-3 space-y-1 text-xs leading-relaxed text-muted-foreground"><p>{translate(reference.caption)}</p><p>{translate("Image: ")}<a href={reference.source} target="_blank" rel="noreferrer" className="underline underline-offset-2">{translate(reference.credit)}</a>{translate(".")}</p></figcaption>
       </figure>
       <p className="rounded-lg border border-border bg-muted p-3 text-xs leading-relaxed">{translate(profile.note)}</p>
