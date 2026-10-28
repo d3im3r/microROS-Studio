@@ -70,7 +70,7 @@ export const projectSchema = z.object({
     }
   });
   if(pubs>10||subs>5)ctx.addIssue({code:"custom",message:"The base firmware supports up to 10 publishers and 5 subscribers."});
-  if(servos>2||generalPwm>board.pwmChannels-2)ctx.addIssue({code:"custom",message:`PWM: ${board.title} supports 2 servos and ${board.pwmChannels-2} additional channels in this profile (separate 50 Hz and 1 kHz timers).`});
+  if(servos>2||generalPwm>board.pwmChannels-2)ctx.addIssue({code:"custom",message:`PWM: ${board.title} supports 2 servos and ${board.pwmChannels-2} additional channels in this profile (separate 50 Hz and 1 kHz timers).${p.entities.some(e=>e.kind==="device"&&e.device==="passive-buzzer")?" Each passive buzzer reserves 2 channels for an independent tone timer.":""}`});
   if (p.transport === "serial" || board.family !== "esp32") { pins.add(board.uart.tx); pins.add(board.uart.rx); pinOwners.set(board.uart.tx, "Serial TX"); pinOwners.set(board.uart.rx, "Serial RX"); }
   p.entities.forEach((e, i) => {
     const entityTopics = [e.topic, ...(e.kind === "robot" && e.behavior === "differential" ? [e.outputTopic] : [])];

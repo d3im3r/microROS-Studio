@@ -32,7 +32,15 @@ inline bool digitalRead(int) { return false; }
 inline uint32_t millis() { return test_clock_ms; }
 inline void delay(int ms) { if(static_cast<unsigned>(ms)>test_max_delay_ms)test_max_delay_ms=ms; }
 inline void delayMicroseconds(int) {}
-inline void ledcWrite(int,uint32_t) {}
+inline uint32_t test_pwm_duty[16] = {};
+inline uint32_t test_tone_frequency[16] = {};
+inline bool test_tone_failure = false;
+inline void ledcWrite(int channel,uint32_t duty) { test_pwm_duty[channel]=duty; }
+inline uint32_t ledcWriteTone(int channel,uint32_t frequency) {
+ if(!frequency){ledcWrite(channel,0);test_tone_frequency[channel]=0;return 0;}
+ if(test_tone_failure)return 0;
+ test_tone_frequency[channel]=frequency;ledcWrite(channel,511);return frequency;
+}
 inline uint32_t ledcSetup(int,int,int) { return 1000; }
 inline void ledcAttachPin(int,int) {}
 inline int digitalPinToInterrupt(int x) { return x; }

@@ -438,9 +438,9 @@ test("new devices, board-specific touch, names, onboard LED and next steps",asyn
  // Restore the valid initial project for the final navigation and built-in LED checks.
  page.once("dialog",dialog=>dialog.accept());await page.getByRole("button",{name:"Restore example",exact:true}).click();
  await page.getByRole("button",{name:"4 Outputs and actuators",exact:true}).click();
- for(const title of ["Active buzzer","I2C character LCD · 16×2","4-digit LED display · TM1637","Stepper motor + driver · 28BYJ-48 + ULN2003","LED matrix + driver · MAX7219"])await expect(page.getByRole("button",{name:title,exact:true})).toBeEnabled();
- await page.getByRole("button",{name:"Active buzzer",exact:true}).click();
- await expect(page.getByRole("combobox",{name:"Buzzer output",exact:true}).locator("option").filter({hasText:"/led_builtin"})).toHaveText("GPIO 2 /led_builtin");
+ for(const title of ["Passive buzzer · Frequency tones","I2C character LCD · 16×2","4-digit LED display · TM1637","Stepper motor + driver · 28BYJ-48 + ULN2003","LED matrix + driver · MAX7219"])await expect(page.getByRole("button",{name:title,exact:true})).toBeEnabled();
+ await page.getByRole("button",{name:"Passive buzzer · Frequency tones",exact:true}).click();
+ await expect(page.getByRole("combobox",{name:"Buzzer PWM signal",exact:true}).locator("option").filter({hasText:"/led_builtin"})).toHaveText("GPIO 2 /led_builtin");
  await page.getByRole("button",{name:"Delete entity",exact:true}).click();
  await page.getByRole("button",{name:"5 Review and generate",exact:true}).click();
  await page.getByRole("button",{name:"Next steps",exact:true}).click();
@@ -450,9 +450,9 @@ test("new devices, board-specific touch, names, onboard LED and next steps",asyn
 });
 
 
-test("Beta 0.2 language toggle persists and keeps firmware unchanged", async ({page})=>{
+test("language toggle persists and keeps firmware unchanged", async ({page})=>{
  await page.goto("/");
- await expect(page.getByText("BETA 0.2",{exact:true})).toBeVisible();
+ await expect(page.getByText("BETA 0.3",{exact:true})).toBeVisible();
  const original=await page.getByLabel("Generated code for main.cpp").locator(".code-text").allTextContents();
  await page.getByRole("button",{name:"Switch to Spanish"}).click();
  await expect(page.locator("html")).toHaveAttribute("lang","es");
@@ -474,7 +474,7 @@ test("Beta 0.2 language toggle persists and keeps firmware unchanged", async ({p
  await expect(page.getByRole("combobox",{name:"Button",exact:true})).toHaveValue("-1");
 });
 
-test("Beta 0.2 offers optional XSHUT and STBY and exports named pins",async({page})=>{
+test("offers optional XSHUT and STBY and exports named pins",async({page})=>{
  await page.goto("/");
  await page.getByRole("button",{name:"3 Inputs and sensors",exact:true}).click();
  await page.getByRole("button",{name:"Infrared ToF distance sensor · VL53L0Xv2",exact:true}).click();
@@ -489,4 +489,94 @@ test("Beta 0.2 offers optional XSHUT and STBY and exports named pins",async({pag
  await expect(page.getByLabel("Configuration status")).toContainText("Valid configuration");
  await expect(page.getByLabel("Generated code for main.cpp")).toContainText("const uint8_t led1 = 2;");
  await expect(page.getByLabel("Generated code for main.cpp")).toContainText("pinMode(led1, OUTPUT)");
+});
+
+
+test("passive buzzer catalog, bilingual help and retired active draft",async({page})=>{
+ await page.addInitScript(()=>{
+  localStorage.setItem("microros-studio-v1",JSON.stringify({version:1,name:"Saved robot",nodeName:"saved_node",board:"denky32",domain:13,transport:"wifi",ssid:"YOUR_WIFI_SSID",password:"",agentIp:"192.168.1.100",port:8888,entities:[{id:"counter",kind:"publisher",topic:"/counter",message:"Int32",behavior:"counter",period:1000,value:0},{id:"old",kind:"device",device:"active-buzzer",topic:"/buzzer",pins:{signal:4},period:100,activeLow:false,timeout:500}]}));
+ });
+ await page.goto("/");
+ await expect(page.getByLabel("Project name")).toHaveValue("Saved robot");
+ await expect(page.getByText(/The active buzzer was removed from the draft/)).toBeVisible();
+ await page.getByRole("button",{name:"4 Outputs and actuators",exact:true}).click();
+ await expect(page.getByRole("button",{name:"Active buzzer",exact:true})).toHaveCount(0);
+ await page.getByRole("button",{name:"Passive buzzer · Frequency tones",exact:true}).click();
+ await expect(page.getByLabel("ROS 2 topic")).toHaveValue("/buzzer_frequency");
+ await expect(page.getByLabel("Message type")).toHaveValue("std_msgs / Int32");
+ await expect(page.getByRole("combobox",{name:"Polarity",exact:true})).toHaveCount(0);
+ await expect(page.getByLabel("Generated code for main.cpp")).toContainText("ledcWriteTone(2,");
+ await page.getByRole("button",{name:"Switch to Spanish"}).click();
+ await expect(page.getByRole("button",{name:"Buzzer pasivo · Tonos por frecuencia",exact:true})).toBeVisible();
+ await expect(page.getByText(/Comando de frecuencia en Hz/)).toBeVisible();
+ const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem("microros-studio-v1")!));
+ expect(saved.entities.some((e:{device?:string})=>e.device==="active-buzzer")).toBe(false);
+ expect(saved.entities.some((e:{device?:string})=>e.device==="passive-buzzer")).toBe(true);
+});
+
+
+test("responsive editor reflows under browser zoom without footer or column gaps",async({page})=>{
+ test.setTimeout(90000);
+ const errors:string[]=[];
+ page.on("pageerror",e=>errors.push(e.message));
+ page.on("console",m=>{if(m.text().includes("[React Flow]"))errors.push(m.text());});
+ await page.goto("/");
+ await expect(page.getByRole("heading",{name:"Build your micro-ROS node"})).toBeVisible();
+ // CSS viewport equivalents of page zoom on a 1920×1080 display, plus small phones.
+ const sizes=[{width:2400,height:1350},{width:2133,height:1200},{width:1920,height:1080},{width:1536,height:864},{width:1280,height:720},{width:1097,height:617},{width:960,height:540},{width:768,height:432},{width:480,height:640},{width:390,height:844},{width:320,height:568}];
+ for(const size of sizes){
+  await page.setViewportSize(size);
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),{message:`Horizontal overflow at ${size.width}px`}).toBe(true);
+  await expect.poll(()=>page.locator(".studio-grid").evaluate(grid=>{
+   const row=grid.getBoundingClientRect();
+   const children=Array.from(grid.children).map(child=>child.getBoundingClientRect());
+   if(getComputedStyle(grid).display==="grid")return children.every(bounds=>Math.abs(bounds.bottom-row.bottom)<2);
+   return children.every((bounds,i)=>i===0||bounds.top>=children[i-1].bottom-1);
+  }),{message:`Panel alignment at ${size.width}px`}).toBe(true);
+  await expect.poll(()=>page.locator(".configuration-status").evaluate(e=>e.getBoundingClientRect().height)).toBeLessThan(240);
+  await expect.poll(()=>page.getByLabel("Program diagram",{exact:true}).evaluate(diagram=>{
+   const pane=diagram.getBoundingClientRect(),node=diagram.querySelector(".react-flow__node")?.getBoundingClientRect();
+   return !!node&&node.width>0&&node.left>=pane.left-2&&node.right<=pane.right+2&&node.top>=pane.top-2&&node.bottom<=pane.bottom+2;
+  }),{message:`Diagram resize at ${size.width}px`}).toBe(true);
+  await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));
+  await expect.poll(()=>page.locator("footer").evaluate(footer=>{
+   const bounds=footer.getBoundingClientRect(),grid=document.querySelector(".studio-grid")!.getBoundingClientRect();
+   return bounds.top>=grid.bottom-1&&bounds.left>=-1&&bounds.right<=innerWidth+1&&bounds.bottom<=innerHeight+1;
+  }),{message:`Footer positioning at ${size.width}px`}).toBe(true);
+ }
+ await page.screenshot({path:"test-results/responsive-320.png",fullPage:true});
+ await page.setViewportSize({width:1280,height:720});
+ await page.evaluate(()=>window.scrollTo(0,0));
+ await page.screenshot({path:"test-results/responsive-zoom-150.png",fullPage:true});
+ expect(errors).toEqual([]);
+});
+
+test("responsive Spanish controls, long node names and expanded code stay accessible",async({page})=>{
+ test.setTimeout(60000);
+ await page.goto("/");
+ await page.getByRole("combobox",{name:"Board",exact:true}).selectOption("seeed_xiao_esp32s3");
+ await page.getByLabel("Node name",{exact:true}).fill("long_sensor_".repeat(15)+"node");
+ await page.getByRole("button",{name:"Switch to Spanish"}).click();
+ await page.setViewportSize({width:320,height:568});
+ await page.getByRole("button",{name:"4 Salidas y actuadores",exact:true}).click();
+ await page.getByRole("button",{name:"Buzzer pasivo · Tonos por frecuencia",exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ const wizard=page.getByRole("complementary",{name:"Asistente de aplicaciones micro-ROS"});
+ await wizard.getByRole("button",{name:"Siguiente",exact:true}).click();
+ await expect(wizard.getByRole("button",{name:"Siguiente paso",exact:true})).toBeEnabled();
+ await page.getByRole("button",{name:"Ocultar código",exact:true}).click();
+ await expect(page.getByLabel("Código generado para main.cpp")).toBeHidden();
+ await page.getByRole("button",{name:"Mostrar código",exact:true}).click();
+ await page.getByRole("button",{name:"Maximizar código",exact:true}).click();
+ const dialog=page.getByRole("dialog",{name:"Código ampliado",exact:true});
+ await expect(dialog).toBeVisible();
+ await expect.poll(()=>dialog.evaluate(e=>e.scrollWidth<=e.clientWidth+1)).toBe(true);
+ const download=dialog.getByRole("button",{name:"Descargar",exact:true});
+ await expect(download).toBeInViewport();
+ await expect(dialog.getByRole("button",{name:"Restaurar tamaño del panel de código",exact:true})).toBeInViewport();
+ await page.screenshot({path:"test-results/responsive-code-320-es.png"});
+ await page.keyboard.press("Escape");
+ await expect(dialog).toBeHidden();
+ await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));
+ await expect(page.locator("footer")).toBeInViewport();
 });

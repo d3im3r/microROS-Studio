@@ -3,7 +3,7 @@ import type { DeviceType } from "../device-catalog/model";
 
 const devicePrefixes = {
   touch: "sensor_touch", "internal-temperature": "sensor_temperature_internal",
-  lm35: "sensor_lm35", "active-buzzer": "buzzer", lcd1602: "display_lcd1602",
+  lm35: "sensor_lm35", "passive-buzzer": "buzzer", lcd1602: "display_lcd1602",
   stepper28byj: "motor_stepper", max7219: "matrix_max7219", vl53l0x: "sensor_vl53l0x",
   hcsr04: "sensor_hcsr04", mpu6050: "sensor_mpu6050", bno055: "sensor_bno055",
   encoder: "encoder", potentiometer: "potentiometer", dht11: "sensor_dht11",

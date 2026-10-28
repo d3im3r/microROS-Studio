@@ -17,7 +17,7 @@ function ProgramNode({ data, selected }: NodeProps) {
   return <div style={{ borderColor: selected ? color : "var(--border)", width: 214 }} className="border bg-card shadow-xl">
     {kind !== "timer" && kind !== "subscriber" && <Handle type="target" position={Position.Left} />}
     <div className="flex items-center gap-2 border-b border-border px-4 py-3"><Icon size={15} style={{ color }} /><span className="text-[10px] font-bold tracking-widest" style={{ color }}>{translate(String(data.label))}</span></div>
-    <div className="px-4 py-3"><div className="mono text-sm text-foreground">{translate(String(data.title))}</div><div className="mt-1.5 break-words text-[11px] text-muted-foreground">{translate(String(data.detail))}</div></div>
+    <div className="px-4 py-3"><div className="mono break-words text-sm text-foreground">{translate(String(data.title))}</div><div className="mt-1.5 break-words text-[11px] text-muted-foreground">{translate(String(data.detail))}</div></div>
     {kind !== "gpio" && kind !== "publisher" && kind !== "node" && <Handle type="source" position={Position.Right} />}
   </div>;
 }
@@ -98,7 +98,7 @@ export function VisualEditor({ project, selected, onSelect }: { project: Project
     let second = 0;
     const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => { void flow.fitView({ padding: .18, minZoom: .08, maxZoom: 1.5 }); }); });
     return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
-  }, [expanded, flow]);
+  }, [expanded, flow, size.width, size.height]);
   async function toggleFullscreen() {
     if (expanded) {
       if (document.fullscreenElement === container.current) await document.exitFullscreen().catch(() => {});

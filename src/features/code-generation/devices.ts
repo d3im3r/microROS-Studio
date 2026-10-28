@@ -3,8 +3,14 @@ import { pinName } from "./pins";
 import { cppString } from "./strings";
 import type { Fragment } from "./robot";
 export function pwmAssignments(p: Project): number[][] {
-  let servo = 0, pwm = 2;
-  return p.entities.map(e=> e.kind === "robot"&&e.behavior === "motor-pwm" ? [pwm++] : e.kind !== "device" ? [] : devices[e.device].pins.filter(r=>r.mode === "pwm").map(()=>e.device === "servo" ? servo++ : pwm++));
+  let servo = 0, buzzer = 2, pwm = 2 + p.entities.filter(e=>e.kind==="device"&&e.device==="passive-buzzer").length*2;
+  // Each tone owns a complete timer pair; changing its frequency must not retune other outputs.
+  return p.entities.map(e=>{
+    if(e.kind === "robot"&&e.behavior === "motor-pwm")return [pwm++];
+    if(e.kind !== "device")return [];
+    if(e.device === "passive-buzzer"){const channel=buzzer;buzzer+=2;return [channel];}
+    return devices[e.device].pins.filter(r=>r.mode === "pwm").map(()=>e.device === "servo" ? servo++ : pwm++);
+  });
 }
 export function deviceFragment(e: DeviceEntity, i: number, channels: number[], board: BoardProfile = boardProfile("denky32"), instance = 1): Fragment {
  const d: DeviceDefinition=devices[e.device], p=Object.fromEntries(d.pins.map(role=>[role.key,pinName(e,instance,role.key)])), pub=d.direction==="publisher", pkg=["Vector3","Twist"].includes(d.message)?"geometry_msgs":"std_msgs";
@@ -60,9 +66,13 @@ export function deviceFragment(e: DeviceEntity, i: number, channels: number[], b
   f.callbacks=`void IRAM_ATTR encoder_isr_${i}() {\n    const bool different = digitalRead(${p.a}) != digitalRead(${p.b});\n    portENTER_CRITICAL_ISR(&mux_${i});\n    ticks_${i} += different ? ${e.activeLow?"-1 : 1":"1 : -1"};\n    portEXIT_CRITICAL_ISR(&mux_${i});\n}\n`+timer(`    portENTER_CRITICAL(&mux_${i});\n    msg_${i}.data = static_cast<int32_t>(ticks_${i});\n    portEXIT_CRITICAL(&mux_${i});`);
   f.hardware=`    pinMode(${p.a}, ${board.family==="esp32"&&e.pins.a>=34?"INPUT":"INPUT_PULLUP"}); pinMode(${p.b}, ${board.family==="esp32"&&e.pins.b>=34?"INPUT":"INPUT_PULLUP"});\n    attachInterrupt(digitalPinToInterrupt(${p.a}), encoder_isr_${i}, CHANGE);`;
  }
- if(["led","digital-output","active-buzzer"].includes(e.device)){
+ if(["led","digital-output"].includes(e.device)){
   f.hardware=`    pinMode(${p.signal}, OUTPUT); digitalWrite(${p.signal}, ${e.activeLow?"HIGH":"LOW"});`;
   f.callbacks=callback(`    digitalWrite(${p.signal}, msg->data ? ${polarity});`);
+ }
+ if(e.device==="passive-buzzer"){
+  f.hardware=setupPwm(1000,10);
+  f.callbacks=callback(`    const int32_t frequency = msg->data;\n    if (frequency == 0) { ledcWriteTone(${channels[0]}, 0); return; }\n    if (frequency < 100 || frequency > 10000) {\n        ledcWriteTone(${channels[0]}, 0);\n        ros.info("Buzzer frequency must be 100-10000 Hz, or 0 for silence");\n        return;\n    }\n    if (ledcWriteTone(${channels[0]}, static_cast<uint32_t>(frequency)) == 0) {\n        ledcWrite(${channels[0]}, 0);\n        ros.info("Failed to configure buzzer tone");\n    }`);
  }
  if(e.device==="servo"){
   const bits=board.servoBits, scale=2**bits-1;

@@ -1,6 +1,12 @@
 export type Language = "en" | "es";
 
 const spanish: Record<string, string> = {
+  "Passive buzzer · Frequency tones": "Buzzer pasivo · Tonos por frecuencia",
+  "Buzzer PWM signal": "Señal PWM del buzzer",
+  "Frequency command in Hz (100–10000); 0 silences the buzzer. Starts silent. Out-of-range commands silence the output and report an error.": "Comando de frecuencia en Hz (100–10000); 0 silencia el buzzer. Inicia en silencio. Los comandos fuera de rango silencian la salida y notifican un error.",
+  "For a passive buzzer, not an active buzzer module. Uses an independent PWM timer so other outputs keep their frequency. Use a driver transistor when the buzzer current exceeds GPIO limits, with common GND.": "Para un buzzer pasivo, no un módulo de buzzer activo. Usa un temporizador PWM independiente para conservar la frecuencia de las demás salidas. Usa un transistor si el consumo del buzzer supera el límite del GPIO, con GND común.",
+  "Each passive buzzer reserves 2 channels for an independent tone timer.": "Cada buzzer pasivo reserva 2 canales para un temporizador de tono independiente.",
+  "The active buzzer was removed from the draft. Add a passive buzzer to use tones.": "Se retiró el buzzer activo del borrador. Añade un buzzer pasivo para usar tonos.",
   "Capacitive touch input": "Entrada táctil capacitiva",
   "Internal temperature sensor": "Sensor de temperatura interno",
   "Analog temperature sensor · LM35": "Sensor de temperatura analógico · LM35",
@@ -226,7 +232,6 @@ const spanish: Record<string, string> = {
   "Capacitive touch pin": "Pin touch capacitivo",
   "Internal chip temperature": "Temperatura interna del chip",
   "LM35 temperature sensor": "Sensor de temperatura LM35",
-  "Active buzzer": "Buzzer activo",
   "16×2 I²C LCD": "LCD 16×2 con I²C",
   "28BYJ-48 stepper motor + ULN2003": "Motor paso a paso 28BYJ-48 + ULN2003",
   "MAX7219 LED matrix": "Matriz LED MAX7219",
@@ -245,7 +250,6 @@ const spanish: Record<string, string> = {
   "Generic analog PWM output": "Salida analógica PWM genérica",
   "Touch signal": "Señal touch",
   "LM35 signal · ADC1": "Señal LM35 · ADC1",
-  "Buzzer output": "Salida del buzzer",
   "Trigger": "Disparo",
   "Echo": "Eco",
   "Channel A": "Canal A",
@@ -269,8 +273,6 @@ const spanish: Record<string, string> = {
   "An approximate silicon temperature, not ambient temperature. It varies with workload, WiFi and chip revision; a failed reading is published as NaN.": "Temperatura aproximada del silicio, no del ambiente. Varía con la carga, el WiFi y la revisión del chip; una lectura fallida se publica como NaN.",
   "Temperature in °C: calibrated millivolt reading divided by 10 mV/°C.": "Temperatura en °C: lectura calibrada en milivoltios dividida entre 10 mV/°C.",
   "LM35 supply: 4–30 V. Use a 5 V supply and common GND. Keep the ESP32 signal below 3.3 V. This single-supply profile measures positive temperatures; ADC accuracy is limited, especially near 0 °C.": "Alimentación LM35: 4–30 V. Usa una fuente de 5 V y GND común. Mantén la señal del ESP32 por debajo de 3.3 V. Este perfil mide temperaturas positivas; la precisión del ADC es limitada, especialmente cerca de 0 °C.",
-  "true turns sound on and false turns it off; initially off. Designed for an active buzzer; no PWM tones are generated.": "true activa el sonido y false lo apaga; inicialmente apagado. Para un buzzer activo; no genera tonos PWM.",
-  "Use a module with a 3.3 V logic input or a driver transistor; do not power a high-current buzzer from a GPIO.": "Usa un módulo con entrada lógica de 3.3 V o un transistor; no alimentes un buzzer de alto consumo desde un GPIO.",
   "HD44780 LCD with 16 columns, 2 rows and a PCF8574/PCF8574A adapter. Displays the received integer.": "LCD HD44780 de 16 columnas y 2 filas con adaptador PCF8574/PCF8574A. Muestra el entero recibido.",
   "Default address: 0x27; check A0–A2 jumpers. Adapters commonly use 5 V: add I2C level shifting and keep 5 V pull-ups away from the ESP32.": "Dirección predeterminada: 0x27; revisa los puentes A0–A2. Los adaptadores suelen usar 5 V: adapta los niveles I2C y evita pull-ups de 5 V en el ESP32.",
   "Absolute position in half-steps from startup (±1000000). Nonblocking motion: up to 400 half-steps/s and 200 steps/s² acceleration.": "Posición absoluta en medios pasos desde el arranque (±1000000). Movimiento sin bloqueo: hasta 400 medios pasos/s y aceleración de 200 pasos/s².",

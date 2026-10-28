@@ -17,7 +17,7 @@ export function ProjectWizard({project:p,update,addDevice,select,errors,reset,sh
  useEffect(()=>onStepChange(step),[step,onStepChange]);
  const hasI2c=p.entities.some(e=>e.kind==="device"&&e.address!==undefined||e.kind==="robot"&&["imu-yaw","tof-triple"].includes(e.behavior));
  const stepErrors=step===0?errors.filter(e=>/^(name|nodeName|domain|board):/.test(e)):step===1?errors.filter(e=>/^(ssid|agentIp|port):|I2C: SDA/.test(e)):[];
- return <aside aria-label={translate("micro-ROS application wizard")} className="space-y-5 border-r border-border bg-card p-5 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-160px)] lg:overflow-y-auto">
+ return <aside aria-label={translate("micro-ROS application wizard")} className="studio-sidebar border-r border-border bg-card"><div className="studio-sidebar-content space-y-5 p-5">
  <div><h2 className="text-sm font-semibold">{translate("Build your application")}</h2><p className="mt-1 text-xs text-muted-foreground">{translate("Step ")}{translate(step+1)} {translate("of ")}{translate(steps.length)}</p></div>
  <nav aria-label={translate("Build steps")} className="space-y-1">{steps.map((name,i)=><button key={name} aria-current={i===step?"step":undefined} onClick={()=>setStep(i)} className={`flex w-full items-center gap-2 rounded-lg p-2 text-left text-xs ${i===step?"bg-primary/15 font-semibold text-secondary dark:text-primary":"text-muted-foreground hover:bg-muted"}`}><span className="grid size-5 shrink-0 place-items-center rounded-full border border-border">{i<step?<Check size={12}/>:i+1}</span>{translate(name)}</button>)}</nav>
  <div className="border-t border-border pt-4"><h3 className="mb-3 text-sm font-semibold">{translate(steps[step])}</h3>
@@ -30,5 +30,5 @@ export function ProjectWizard({project:p,update,addDevice,select,errors,reset,sh
  {!!stepErrors.length&&<ul role="alert" className="space-y-1 text-xs text-destructive">{stepErrors.map((e,i)=><li key={i}>{translate(e)}</li>)}</ul>}
  <div className="flex justify-between gap-2 border-t border-border pt-4"><Button variant="outline" size="sm" disabled={step===0} onClick={()=>setStep(step-1)}><ChevronLeft/>{translate("Back")}</Button><Button size="sm" disabled={!!stepErrors.length||(step===4&&!!errors.length)} onClick={()=>step===4?nextSteps():setStep(step+1)}>{translate(step===4?"Next steps":"Next")}<ChevronRight/></Button></div>
  <Button variant="outline" size="sm" className="w-full shadow-sm" onClick={()=>{reset();setStep(0);}}><RotateCcw/>{translate("Restore example")}</Button>
- </aside>;
+ </div></aside>;
 }

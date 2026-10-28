@@ -400,7 +400,7 @@ test("names, fixed port, onboard LED and new actuators",()=>{
  assert.ok(validateProject({...defaultProject,entities:[{...lcd,address:0x3c},oled]}).some(x=>x.includes("I2C")));
  assert.match(generateFiles({...defaultProject,entities:[lcd]}).main,/begin\(16, 2, Wire\)/);
  assert.match(generateFiles({...defaultProject,entities:[createDevice("max7219","m")]}).main,/setRow/);
- assert.match(generateFiles({...defaultProject,entities:[createDevice("active-buzzer","b")]}).main,/digitalWrite\(buzzer1, LOW\)/);
+ assert.match(generateFiles({...defaultProject,entities:[createDevice("passive-buzzer","b")]}).main,/ledcAttachPin\(buzzer1, 2\)/);
 });
 
 test("minimal INI with inherited settings and required exceptions",()=>{
@@ -568,4 +568,72 @@ test("catalog labels identify sensing technology and motor drivers in both langu
  }
  assert.equal(translateText(devices.vl53l0x.title,"es"),"Sensor de distancia infrarrojo ToF · VL53L0Xv2");
  assert.equal(translateText(devices.joystick.title,"es"),"Joystick analógico de 2 ejes");
+});
+
+
+import { removeRetiredDevices } from "../project/migrations";
+test("passive buzzer replaces active hardware with Int32 frequency commands",()=>{
+ assert.ok(!("active-buzzer" in devices));
+ const buzzer=createDevice("passive-buzzer","buzzer");
+ assert.equal(buzzer.topic,"/buzzer_frequency");
+ assert.equal(devices[buzzer.device].message,"Int32");
+ assert.equal(translateText(devices[buzzer.device].title,"es"),"Buzzer pasivo · Tonos por frecuencia");
+ const {main}=generateFiles({...defaultProject,entities:[buzzer]});
+ assert.match(main,/std_msgs__msg__Int32/);
+ assert.match(main,/const uint8_t buzzer1 = 4;/);
+ assert.match(main,/ledcSetup\(2, 1000, 10\)/);
+ assert.match(main,/ledcAttachPin\(buzzer1, 2\)/);
+ assert.match(main,/ledcWrite\(2, 0\)/);
+ assert.match(main,/frequency < 100 \|\| frequency > 10000/);
+ assert.match(main,/ledcWriteTone\(2, static_cast<uint32_t>\(frequency\)\)/);
+ assert.doesNotMatch(main,/digitalWrite\(buzzer1/);
+});
+
+test("passive buzzer owns an independent timer pair on every board",()=>{
+ const tone1=createDevice("passive-buzzer","b1"),tone2={...tone1,id:"b2",topic:"/tone2"};
+ const mixed={...defaultProject,entities:[createDevice("servo","s"),tone1,createDevice("pwm-output","p"),tone2]};
+ assert.deepEqual(pwmAssignments(mixed),[[0],[2],[6],[4]]);
+ for(const board of Object.keys(boards) as BoardId[]){
+  const entities=Array.from({length:3},(_,i)=>({...tone1,id:`tone${i}`,topic:`/tone${i}`,pins:{signal:boardProfile(board).output[i]}}));
+  const p={...defaultProject,board,entities};
+  assert.equal(validateProject(p).some(e=>e.includes("independent tone timer")),boardProfile(board).pwmChannels-2<6,board);
+  const channels=pwmAssignments(p).flat();
+  assert.equal(new Set(channels.map(channel=>Math.floor(channel/2))).size,channels.length);
+ }
+});
+
+test("retiring the active buzzer preserves the rest of the saved draft",()=>{
+ const previous=[...defaultProject.entities,{...createDevice("passive-buzzer","old"),device:"active-buzzer",topic:"/buzzer"}];
+ const migrated=removeRetiredDevices(previous);
+ assert.equal(migrated.removedActiveBuzzer,true);
+ assert.deepEqual(migrated.entities,defaultProject.entities);
+ assert.equal(previous.length,3);
+ assert.deepEqual(removeRetiredDevices(defaultProject.entities),{entities:defaultProject.entities,removedActiveBuzzer:false});
+ assert.deepEqual(removeRetiredDevices(null),{entities:null,removedActiveBuzzer:false});
+});
+
+test("C++ runtime: passive buzzer frequency, silence, invalid commands and PWM failure",{skip:spawnSync("g++",["--version"]).status!==0},()=>{
+ const dir=mkdtempSync(join(tmpdir(),"microros-passive-buzzer-"));
+ try{
+  copyFileSync("tests/firmware-stubs/Arduino.h",join(dir,"Arduino.h"));
+  for(const path of ["MicroROSHelper.h","std_msgs/msg/int32.h"]){const file=join(dir,path);mkdirSync(join(file,".."),{recursive:true});writeFileSync(file,"#pragma once\n");}
+  const main=generateFiles({...defaultProject,entities:[createDevice("passive-buzzer","b")]}).main;
+  const harness=`
+#include <cassert>
+int main(){
+ setup();assert(test_pwm_duty[2]==0);
+ std_msgs__msg__Int32 command;
+ for(const int hz : {100,440,1000,10000}){command.data=hz;subscription_callback_0(&command);assert(test_tone_frequency[2]==static_cast<uint32_t>(hz));assert(test_pwm_duty[2]>0);}
+ command.data=0;subscription_callback_0(&command);assert(test_pwm_duty[2]==0);
+ for(const int hz : {-1,99,10001,INT32_MAX}){command.data=440;subscription_callback_0(&command);command.data=hz;subscription_callback_0(&command);assert(test_pwm_duty[2]==0);}
+ test_tone_failure=true;command.data=440;subscription_callback_0(&command);assert(test_pwm_duty[2]==0);
+ subscription_callback_0(nullptr);assert(test_pwm_duty[2]==0);
+}
+`;
+  writeFileSync(join(dir,"main.cpp"),main+harness);
+  const binary=join(dir,"buzzer");
+  const compiled=spawnSync("g++",["-std=c++17","-DTEST_CAPTURE_LOGS","-DMICRO_ROS_TRANSPORT_ARDUINO_WIFI","-I",dir,join(dir,"main.cpp"),"-o",binary],{encoding:"utf8"});
+  assert.equal(compiled.status,0,compiled.stderr);
+  const result=spawnSync(binary,[],{encoding:"utf8"});assert.equal(result.status,0,result.stderr);
+ }finally{rmSync(dir,{recursive:true,force:true});}
 });
