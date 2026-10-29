@@ -3,20 +3,22 @@ import { useLanguage } from "../language";
 
 import { useEffect, useRef, useState } from "react";
 import { Background, Panel, PanOnScrollMode, Handle, Position, ReactFlow, applyNodeChanges, type Node, type NodeProps, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
-import { Radio, Timer, Cpu, Lightbulb, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus } from "lucide-react";
+import { Radio, Timer, Cpu, Lightbulb, TriangleAlert, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { useTheme } from "../theme";
-import { entityDirection, entityMessage, entityTitle, devices } from "../program";
+import { entityDirection, entityMessage, entityTitle, devices, validateEntityIssues } from "../program";
 import type { Project } from "../program";
 
 function ProgramNode({ data, selected }: NodeProps) {
   const { translate } = useLanguage();
   const kind = data.kind as string;
+  const hasError = Boolean(data.hasError);
+  const errorText = data.errorText ? String(data.errorText) : "";
   const Icon = kind === "timer" ? Timer : kind === "gpio" ? Lightbulb : kind === "node" ? Cpu : Radio;
-  const color = kind === "subscriber" || kind === "gpio" ? "var(--diagram-output-accent, var(--secondary))" : "var(--ring)";
-  return <div style={{ borderColor: selected ? color : "var(--border)", width: 214 }} className="border bg-card shadow-xl">
+  const color = hasError ? "var(--destructive)" : kind === "subscriber" || kind === "gpio" ? "var(--diagram-output-accent, var(--secondary))" : "var(--ring)";
+  return <div data-conflict={hasError ? "true" : undefined} title={hasError ? translate(errorText) : undefined} style={{ borderColor: hasError ? "var(--destructive)" : selected ? color : "var(--border)", width: 214 }} className="border bg-card shadow-xl">
     {kind !== "timer" && kind !== "subscriber" && <Handle type="target" position={Position.Left} />}
-    <div className="flex items-center gap-2 border-b border-border px-4 py-3"><Icon size={15} style={{ color }} /><span className="text-[10px] font-bold tracking-widest" style={{ color }}>{translate(String(data.label))}</span></div>
+    <div className="flex items-center gap-2 border-b border-border px-4 py-3"><Icon size={15} style={{ color }} /><span className="text-[10px] font-bold tracking-widest" style={{ color }}>{translate(String(data.label))}</span>{hasError && <TriangleAlert size={13} aria-label={translate("Conflict")} className="ml-auto shrink-0 text-destructive" />}</div>
     <div className="px-4 py-3"><div className="mono break-words text-sm text-foreground">{translate(String(data.title))}</div><div className="mt-1.5 break-words text-[11px] text-muted-foreground">{translate(String(data.detail))}</div></div>
     {kind !== "gpio" && kind !== "publisher" && kind !== "node" && <Handle type="source" position={Position.Right} />}
   </div>;
@@ -112,18 +114,23 @@ export function VisualEditor({ project, selected, onSelect }: { project: Project
   const [nodes, setNodes] = useState<Node[]>([]);
   useEffect(() => {
     const next: Node[] = [];
+    const entityIssues = validateEntityIssues(project);
     project.entities.forEach((entity, index) => {
       const y = index * 165 + 45;
       const pub = entityDirection(entity) === "publisher";
+      const issues = entityIssues[entity.id] ?? [];
+      const hasError = issues.length > 0;
+      const errorText = issues.join(" · ");
       next.push({ id: entity.id, type: "program", position: { x: pub ? 380 : 55, y }, selected: entity.id === selected,
-        data: { kind: pub ? "publisher" : "subscriber", label: pub ? "PUBLISHER" : "SUBSCRIBER", title: entity.topic, detail: `${["Vector3", "Twist"].includes(entityMessage(entity)) ? "geometry_msgs" : "std_msgs"} / ${entityMessage(entity)}` } });
+        data: { kind: pub ? "publisher" : "subscriber", label: pub ? "PUBLISHER" : "SUBSCRIBER", title: entity.topic, detail: `${["Vector3", "Twist"].includes(entityMessage(entity)) ? "geometry_msgs" : "std_msgs"} / ${entityMessage(entity)}`, hasError, errorText } });
       next.push({ id: `${entity.id}:behavior`, type: "program", position: { x: pub ? 55 : 380, y },
-        data: entity.kind === "device" ? { kind: pub ? "timer" : "gpio", label: pub ? "INPUT + TIMER" : "OUTPUT", title: entityTitle(entity), detail: entity.address !== undefined ? `I2C 0x${entity.address.toString(16).toUpperCase()}` : devices[entity.device].pins.map(role=>`${role.label}: ${entity.pins[role.key]===-1?"Not connected":entity.pins[role.key]}`).join(" · ") } : entity.kind === "robot" ? {kind:pub?"timer":"gpio",label:"BEHAVIOR",title:entityTitle(entity),detail:entity.behavior === "differential"?`→ ${entity.outputTopic}`:pub?`${entity.period} ms`:`Watchdog ${entity.timeout} ms`} : entity.kind === "publisher" ? {kind:"timer",label:"TIMER + BEHAVIOR",title:`${entity.period} ms`,detail:entity.behavior === "counter"?"Counter · 1, 2, 3…":"Publish message"} : {kind:"gpio",label:"DIGITAL OUTPUT",title:`GPIO ${entity.pin}`,detail:"true: on · false: off"} });
+        data: { ...(entity.kind === "device" ? { kind: pub ? "timer" : "gpio", label: pub ? "INPUT + TIMER" : "OUTPUT", title: entityTitle(entity), detail: entity.address !== undefined ? `I2C 0x${entity.address.toString(16).toUpperCase()}` : devices[entity.device].pins.map(role=>`${role.label}: ${entity.pins[role.key]===-1?"Not connected":entity.pins[role.key]}`).join(" · ") } : entity.kind === "robot" ? {kind:pub?"timer":"gpio",label:"BEHAVIOR",title:entityTitle(entity),detail:entity.behavior === "differential"?`→ ${entity.outputTopic}`:pub?`${entity.period} ms`:`Watchdog ${entity.timeout} ms`} : entity.kind === "publisher" ? {kind:"timer",label:"TIMER + BEHAVIOR",title:`${entity.period} ms`,detail:entity.behavior === "counter"?"Counter · 1, 2, 3…":"Publish message"} : {kind:"gpio",label:"DIGITAL OUTPUT",title:`GPIO ${entity.pin}`,detail:"true: on · false: off"}), hasError, errorText } });
     });
     if (!next.length) next.push({ id: "empty", type: "program", position: { x: 210, y: 140 }, data: { kind: "node", label: "ROS 2 NODE", title: project.nodeName, detail: "Add an entity to get started" } });
     setNodes(previous => next.map(n => ({ ...n, position: previous.find(p => p.id === n.id)?.position ?? n.position })));
   }, [project, selected]);
-  const edges = project.entities.map(e => ({ id: `edge-${e.id}`, source: (entityDirection(e) === "publisher") ? `${e.id}:behavior` : e.id, target: (entityDirection(e) === "publisher") ? e.id : `${e.id}:behavior`, animated: true, style: { stroke: (entityDirection(e) === "publisher") ? "var(--ring)" : "var(--diagram-output-accent, var(--secondary))" } }));
+  const entityIssues = validateEntityIssues(project);
+  const edges = project.entities.map(e => ({ id: `edge-${e.id}`, source: (entityDirection(e) === "publisher") ? `${e.id}:behavior` : e.id, target: (entityDirection(e) === "publisher") ? e.id : `${e.id}:behavior`, animated: true, style: { stroke: entityIssues[e.id]?.length ? "var(--destructive)" : (entityDirection(e) === "publisher") ? "var(--ring)" : "var(--diagram-output-accent, var(--secondary))" } }));
   function change(changes: NodeChange[]) { setNodes(n => applyNodeChanges(changes, n)); }
   return <div ref={container} data-expanded={expanded} aria-label={translate("Program diagram")} className={expanded ? "diagram-fullscreen bg-card" : "absolute inset-0 min-h-0 min-w-0 bg-card"}>
   {size.width > 0 && size.height > 0 && <ReactFlow style={{ width: size.width, height: size.height }} onInit={setFlow} onMove={(_,viewport)=>setZoom(viewport.zoom)} panOnScroll panOnScrollMode={PanOnScrollMode.Vertical} zoomOnScroll={false} zoomOnPinch zoomActivationKeyCode="Control" preventScrolling nodes={nodes} edges={edges} onNodesChange={change} nodeTypes={nodeTypes} onNodeClick={(_, n) => onSelect(n.id.replace(":behavior", ""))} onPaneClick={() => onSelect(null)} nodesConnectable={false} deleteKeyCode={null} fitView minZoom={.08} maxZoom={2} colorMode={theme}>

@@ -113,6 +113,59 @@ export function validateProject(project: Project): string[] {
   const result = projectSchema.safeParse(project);
   return result.success ? [] : result.error.issues.map(i => `${i.path.join(".") || "Program"}: ${i.message}`);
 }
+export function validateEntityIssues(project: Project): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+  const add = (id: string | undefined, msg: string) => {
+    if (!id) return;
+    if (!map[id]) map[id] = [];
+    if (!map[id].includes(msg)) map[id].push(msg);
+  };
+  const result = projectSchema.safeParse(project);
+  if (result.success) return map;
+  for (const issue of result.error.issues) {
+    if (issue.path[0] === "entities" && typeof issue.path[1] === "number") {
+      add(project.entities[issue.path[1]]?.id, issue.message);
+    }
+  }
+  const topicOwners = new Map<string, string>();
+  const pinOwners = new Map<number, string>();
+  const addrOwners = new Map<number, string>();
+  const vlSensors = project.entities.filter(e => e.kind === "device" && e.device === "vl53l0x");
+  for (const e of project.entities) {
+    const topics = [e.topic, ...(e.kind === "robot" && e.behavior === "differential" ? [e.outputTopic] : [])];
+    for (const t of topics) {
+      if (topicOwners.has(t)) {
+        const msg = `Duplicate topic: ${t}.`;
+        add(topicOwners.get(t), msg);
+        add(e.id, msg);
+      } else topicOwners.set(t, e.id);
+    }
+    const assigned = e.kind === "device" ? ((devices[e.device] as DeviceDefinition).addresses ? [e.address!] : []) : e.kind === "robot" ? (e.behavior === "imu-yaw" ? [0x28] : e.behavior === "tof-triple" ? [0x30, 0x31, 0x32] : []) : [];
+    for (const addr of assigned) {
+      if (addrOwners.has(addr)) {
+        const msg = `I2C: address 0x${addr.toString(16)} duplicated.`;
+        add(addrOwners.get(addr), msg);
+        add(e.id, msg);
+      } else addrOwners.set(addr, e.id);
+      if (vlSensors.length > 0 && addr === 0x29 && !(e.kind === "device" && e.device === "vl53l0x")) {
+        add(e.id, "I2C: keep 0x29 free while initializing VL53L0X sensors. Change the other device address.");
+      }
+    }
+    if (e.kind === "device" && e.device === "vl53l0x" && e.pins.xshut === -1 && (vlSensors.length > 1 || e.address !== 0x29)) {
+      add(e.id, "VL53L0X: without XSHUT, use a single sensor at address 0x29. Multiple sensors require separate XSHUT pins.");
+    }
+    const usedPins = e.kind === "device"
+      ? devices[e.device].pins.filter(role => !(role.optional && e.pins[role.key] === -1)).map(role => e.pins[role.key])
+      : e.kind === "subscriber" ? [e.pin] : e.kind === "robot" ? robotPins(e) : [];
+    for (const pin of usedPins) {
+      if (pinOwners.has(pin)) {
+        add(pinOwners.get(pin), `GPIO ${pin} conflict`);
+        add(e.id, `GPIO ${pin} conflict`);
+      } else pinOwners.set(pin, e.id);
+    }
+  }
+  return map;
+}
 export function handles(project: Project) { return project.entities.length; }
 
 export function entityDirection(e: Entity): "publisher" | "subscriber" { return e.kind === "device" ? devices[e.device].direction : e.kind === "robot" ? robotDefinitions[e.behavior].direction : e.kind; }

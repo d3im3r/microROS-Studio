@@ -591,3 +591,52 @@ test("responsive Spanish controls, long node names and expanded code stay access
  await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));
  await expect(page.locator("footer")).toBeInViewport();
 });
+
+
+test("exports/imports JSON, highlights conflicting diagram nodes and enforces Better Auth login", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Project name", { exact: true }).fill("Telemetry Robot");
+  const jsonDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export JSON", exact: true }).click();
+  const jsonDownload = await jsonDownloadPromise;
+  expect(jsonDownload.suggestedFilename()).toBe("telemetry-robot.microros.json");
+  const exportedBytes = await (await jsonDownload.createReadStream())!.toArray();
+  const exportedJson = Buffer.concat(exportedBytes).toString("utf-8");
+  expect(JSON.parse(exportedJson).name).toBe("Telemetry Robot");
+
+  await page.getByLabel("Project name", { exact: true }).fill("Temporary Name");
+  await page.getByLabel("Import project JSON").setInputFiles({
+    name: "telemetry-robot.microros.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(exportedJson, "utf-8"),
+  });
+  await expect(page.getByLabel("Project name", { exact: true })).toHaveValue("Telemetry Robot");
+  await expect(page.getByText("Project JSON imported.")).toBeVisible();
+
+  // Trigger a GPIO conflict on GPIO 2 and verify diagram node conflict highlight
+  await page.getByRole("button", { name: "3 Inputs and sensors", exact: true }).click();
+  await page.getByRole("button", { name: "Generic digital input · GPIO", exact: true }).click();
+  await page.getByRole("combobox", { name: "Signal", exact: true }).selectOption("2");
+  await expect(page.locator('.react-flow__node[data-id="led"] [data-conflict="true"]')).toBeVisible();
+
+  // Sign out to trigger Better Auth protection
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Access microROS Studio" })).toBeVisible();
+
+  // Register a new user with Better Auth
+  await page.getByRole("tab", { name: "Create account", exact: true }).click();
+  await page.getByLabel("Full name").fill("Ada Lovelace");
+  await page.getByLabel("Email").fill("ada@microros.local");
+  await page.getByLabel("Password").fill("ros2humble-secret");
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Build your micro-ROS node" })).toBeVisible();
+
+  // Sign out and sign back in with Better Auth Email & Password
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Access microROS Studio" })).toBeVisible();
+  await page.getByLabel("Email").fill("ada@microros.local");
+  await page.getByLabel("Password").fill("ros2humble-secret");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Build your micro-ROS node" })).toBeVisible();
+});

@@ -637,3 +637,33 @@ int main(){
   const result=spawnSync(binary,[],{encoding:"utf8"});assert.equal(result.status,0,result.stderr);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+
+import { validateEntityIssues } from "../program";
+import { serializeProjectJson } from "../export-files";
+import { parseProjectDraft } from "../project";
+
+test("maps GPIO, topic and I2C conflicts to both involved entity IDs", () => {
+  const ledA = { id: "ledA", kind: "subscriber" as const, topic: "/led", pin: 2, activeLow: false };
+  const ledB = { id: "ledB", kind: "subscriber" as const, topic: "/led_b", pin: 2, activeLow: false };
+  const gpioIssues = validateEntityIssues({ ...defaultProject, entities: [ledA, ledB] });
+  assert.ok(gpioIssues.ledA?.some(m => m.includes("GPIO 2 conflict")));
+  assert.ok(gpioIssues.ledB?.some(m => m.includes("GPIO 2 conflict")));
+
+  const dupTopicIssues = validateEntityIssues({ ...defaultProject, entities: [ledA, { ...ledB, topic: "/led", pin: 4 }] });
+  assert.ok(dupTopicIssues.ledA?.some(m => m.includes("Duplicate topic")));
+  assert.ok(dupTopicIssues.ledB?.some(m => m.includes("Duplicate topic")));
+});
+
+test("serializes and parses exported project JSON while stripping WiFi password", () => {
+  const raw = serializeProjectJson({ ...defaultProject, name: "Lab Robot", password: "secret-wifi-password" });
+  assert.doesNotMatch(raw, /secret-wifi-password/);
+  const parsed = parseProjectDraft(raw);
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.project.name, "Lab Robot");
+    assert.equal(parsed.project.password, "");
+  }
+  assert.equal(parseProjectDraft("{invalid").ok, false);
+  assert.equal(parseProjectDraft(JSON.stringify({ ...defaultProject, domain: 999 })).ok, false);
+});

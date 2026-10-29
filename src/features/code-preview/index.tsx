@@ -41,6 +41,6 @@ export function CodePreview({ files, platformioEnabled = false }: { files: { mai
   </section>;
   return <>
     {!expanded ? panel : <div aria-hidden="true" className="h-[382px]" />}
-    <dialog ref={dialog} aria-label={translate("Expanded code")} className="fixed inset-0 m-auto h-[calc(100dvh-24px)] max-h-none w-[calc(100vw-24px)] max-w-none rounded-xl border border-border bg-card p-0 text-foreground shadow-2xl backdrop:bg-black/70" onCancel={event => { event.preventDefault(); setExpanded(false); }}>{translate(expanded && panel)}</dialog>
+    <dialog ref={dialog} aria-label={translate("Expanded code")} className="fixed inset-0 m-auto h-[calc(100dvh-24px)] max-h-none w-[calc(100vw-24px)] max-w-none rounded-xl border border-border bg-card p-0 text-foreground shadow-2xl backdrop:bg-black/70" onCancel={event => { event.preventDefault(); setExpanded(false); }}>{expanded && panel}</dialog>
   </>;
 }
