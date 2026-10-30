@@ -78,7 +78,11 @@ export function VisualEditor({ project, selected, onSelect }: { project: Project
     };
   }, [flow]);
   useEffect(() => {
-    function syncFullscreen() { setExpanded(document.fullscreenElement === container.current); }
+    function syncFullscreen() {
+      if (!document.fullscreenElement) {
+        setExpanded(false);
+      }
+    }
     document.addEventListener("fullscreenchange", syncFullscreen);
     return () => document.removeEventListener("fullscreenchange", syncFullscreen);
   }, []);
@@ -87,13 +91,18 @@ export function VisualEditor({ project, selected, onSelect }: { project: Project
     const before = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     function escape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" || event.code === "Escape" || event.keyCode === 27) {
         setExpanded(false);
-        if (document.fullscreenElement === container.current) void document.exitFullscreen().catch(() => {});
+        if (typeof document !== "undefined" && document.fullscreenElement) {
+          void document.exitFullscreen().catch(() => {});
+        }
       }
     }
-    document.addEventListener("keydown", escape);
-    return () => { document.body.style.overflow = before; document.removeEventListener("keydown", escape); };
+    window.addEventListener("keydown", escape, { capture: true });
+    return () => {
+      document.body.style.overflow = before;
+      window.removeEventListener("keydown", escape, { capture: true });
+    };
   }, [expanded]);
   useEffect(() => {
     if (!flow) return;
@@ -103,8 +112,10 @@ export function VisualEditor({ project, selected, onSelect }: { project: Project
   }, [expanded, flow, size.width, size.height]);
   async function toggleFullscreen() {
     if (expanded) {
-      if (document.fullscreenElement === container.current) await document.exitFullscreen().catch(() => {});
       setExpanded(false);
+      if (typeof document !== "undefined" && document.fullscreenElement) {
+        await document.exitFullscreen().catch(() => {});
+      }
     } else {
       setExpanded(true);
       // CSS provides the same expanded view if browser fullscreen is unavailable.

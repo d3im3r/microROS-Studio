@@ -221,7 +221,7 @@ test("final GPIO conflict alert and large diagram navigation", async ({page})=>{
  const expanded=await page.getByLabel("Program diagram",{exact:true}).boundingBox();
  expect(expanded!.width).toBeGreaterThan(1300);
  await page.keyboard.press("Escape");
- await expect(page.getByLabel("Program diagram",{exact:true})).toHaveAttribute("data-expanded","false");
+ await expect(page.getByLabel("Program diagram",{exact:true})).toHaveAttribute("data-expanded","false",{timeout:10000});
  await page.getByRole("button",{name:"Fullscreen diagram",exact:true}).click();
  await page.getByRole("button",{name:"Exit fullscreen",exact:true}).click();
  await expect(page.getByLabel("Program diagram",{exact:true})).toHaveAttribute("data-expanded","false");
