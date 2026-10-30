@@ -1,19 +1,22 @@
 "use client";
 import Image from "next/image";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { Cpu, LogIn, LogOut, UserPlus, ShieldCheck } from "lucide-react";
+import { Cpu, LogIn, LogOut, UserPlus, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { LanguageToggle, useLanguage } from "../language";
 import { ThemeSelector, ThemeToggle } from "../theme";
 import { signIn, signOut, signUp, useSession } from "./client";
+import { AdminPanelDialog } from "./admin-dialog";
 
 export type AuthUser = {
   id: string;
   name: string;
   email: string;
+  role?: string;
 };
 
 const E2E_REQUIRE_AUTH_KEY = "microros-require-auth";
+const ADMIN_EMAIL = "d3im3r@gmail.com";
 
 export function AuthScreen({ onAuthenticated }: { onAuthenticated?: () => void }) {
   const { translate } = useLanguage();
@@ -22,11 +25,13 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated?: () => void }
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [successNotice, setSuccessNotice] = useState("");
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setSuccessNotice("");
     setPending(true);
     try {
       if (mode === "signup") {
@@ -40,13 +45,33 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated?: () => void }
           setPending(false);
           return;
         }
+
+        const isSuperAdmin = email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+        if (!isSuperAdmin) {
+          setSuccessNotice(
+            "Registration successful! Your account is pending administrator approval before you can access."
+          );
+          setMode("signin");
+          setPassword("");
+          setPending(false);
+          return;
+        }
       } else {
         const res = await signIn.email({
           email: email.trim(),
           password,
         });
         if (res.error) {
-          setError(res.error.message || "Invalid email or password.");
+          if (
+            res.error.code === "BANNED_USER" ||
+            res.error.message?.toLowerCase().includes("banned")
+          ) {
+            setError(
+              "Your account is pending administrator approval. Please contact the administrator."
+            );
+          } else {
+            setError(res.error.message || "Invalid email or password.");
+          }
           setPending(false);
           return;
         }
@@ -226,6 +251,12 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated?: () => void }
               </p>
             )}
 
+            {successNotice && (
+              <p role="status" className="rounded-lg border border-primary/30 bg-primary/10 p-2.5 text-xs text-secondary dark:text-primary">
+                {translate(successNotice)}
+              </p>
+            )}
+
             <Button type="submit" className="w-full" disabled={pending}>
               {mode === "signin" ? <LogIn /> : <UserPlus />}
               {translate(
@@ -267,25 +298,51 @@ export function UserSessionControl({
   onSignOut: () => void;
 }) {
   const { translate } = useLanguage();
+  const [adminOpen, setAdminOpen] = useState(false);
+  const isAdmin = user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase() || user.role === "admin";
+
   return (
-    <div className="flex items-center gap-1.5">
-      <span
-        className="hidden max-w-28 truncate text-xs text-muted-foreground xl:inline"
-        title={user.email}
-      >
-        {user.name || user.email}
-      </span>
-      <Button
-        variant="outline"
-        size="icon"
-        className="shrink-0 shadow-sm"
-        aria-label={translate("Sign out")}
-        title={`${translate("Sign out")} (${user.email})`}
-        onClick={onSignOut}
-      >
-        <LogOut />
-      </Button>
-    </div>
+    <>
+      <div className="flex items-center gap-1.5">
+        {isAdmin && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5 border-primary/30 text-secondary shadow-sm dark:text-primary"
+            aria-label={translate("Admin panel")}
+            title={translate("Admin panel")}
+            onClick={() => setAdminOpen(true)}
+          >
+            <Users size={14} />
+            <span className="hidden md:inline">{translate("Admin panel")}</span>
+          </Button>
+        )}
+        <span
+          className="hidden max-w-28 truncate text-xs text-muted-foreground xl:inline"
+          title={user.email}
+        >
+          {user.name || user.email}
+        </span>
+        <Button
+          variant="outline"
+          size="icon"
+          className="shrink-0 shadow-sm"
+          aria-label={translate("Sign out")}
+          title={`${translate("Sign out")} (${user.email})`}
+          onClick={onSignOut}
+        >
+          <LogOut />
+        </Button>
+      </div>
+
+      {isAdmin && (
+        <AdminPanelDialog
+          isOpen={adminOpen}
+          onClose={() => setAdminOpen(false)}
+          currentUserEmail={user.email}
+        />
+      )}
+    </>
   );
 }
 
@@ -339,6 +396,7 @@ export function ProtectedStudio({
         id: session.user.id,
         name: session.user.name || session.user.email,
         email: session.user.email,
+        role: (session.user as unknown as { role?: string }).role,
       },
       signOutUser: handleSignOut,
     });

@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { nextCookies } from "better-auth/next-js";
+import { admin } from "better-auth/plugins";
 import { Pool } from "pg";
 
 type MemoryStore = {
@@ -15,6 +16,8 @@ const globalForAuth = globalThis as unknown as {
   __microrosMemoryDb?: MemoryStore;
   __microrosWarnedPlaceholderDb?: boolean;
 };
+
+const ADMIN_EMAIL = "d3im3r@gmail.com";
 
 function hasValidDatabaseUrl(url: string | undefined): url is string {
   if (!url) return false;
@@ -84,6 +87,42 @@ export const auth = betterAuth({
     enabled: true,
     minPasswordLength: 8,
   },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async user => {
+          const isAdmin = user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+          return {
+            data: {
+              ...user,
+              role: isAdmin ? "admin" : "user",
+            },
+          };
+        },
+        after: async (user, ctx) => {
+          const isAdmin = user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+          if (!isAdmin && ctx?.context?.adapter) {
+            try {
+              await ctx.context.adapter.update({
+                model: "user",
+                where: [{ field: "id", value: user.id }],
+                update: {
+                  banned: true,
+                  banReason: "Pending admin approval",
+                },
+              });
+              await ctx.context.adapter.deleteMany({
+                model: "session",
+                where: [{ field: "userId", value: user.id }],
+              });
+            } catch (err) {
+              console.error("[Better Auth] Failed to set pending ban for new user:", err);
+            }
+          }
+        },
+      },
+    },
+  },
   socialProviders:
     googleClientId && googleClientSecret
       ? {
@@ -93,5 +132,12 @@ export const auth = betterAuth({
           },
         }
       : undefined,
-  plugins: [nextCookies()],
+  plugins: [
+    nextCookies(),
+    admin({
+      defaultRole: "user",
+      adminRoles: ["admin"],
+    }),
+  ],
 });
+

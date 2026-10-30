@@ -578,7 +578,20 @@ const spanish: Record<string, string> = {
   "Project JSON exported.": "JSON del proyecto exportado.",
   "Invalid project JSON: check board, pins and schema.": "JSON del proyecto inválido: revisa la placa, los pines y el esquema.",
   "Could not read the JSON file.": "No se pudo leer el archivo JSON.",
-  "Conflict": "Conflicto"
+  "Conflict": "Conflicto",
+  "Admin panel": "Panel de administración",
+  "User management": "Gestión de usuarios",
+  "Pending approval": "Pendiente de aprobación",
+  "Approved": "Aprobado",
+  "Administrator": "Administrador",
+  "Approve access": "Aprobar acceso",
+  "Revoke access": "Revocar acceso",
+  "Close admin panel": "Cerrar panel de administración",
+  "Registered users": "Usuarios registrados",
+  "Search users...": "Buscar usuarios...",
+  "No users found": "No se encontraron usuarios",
+  "Your account is pending administrator approval. Please contact the administrator.": "Tu cuenta está pendiente de aprobación por el administrador. Por favor contacta al administrador.",
+  "Registration successful! Your account is pending administrator approval before you can access.": "¡Registro exitoso! Tu cuenta está pendiente de aprobación por el administrador antes de poder acceder."
 };
 
 // Longest phrases win; a single pass avoids translating Spanish output again.
