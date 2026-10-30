@@ -283,4 +283,5 @@ The official **d3im3r owl-chip** artwork is stored locally in `public/brand/d3im
 
 The browser favicon uses the fixed yellow CPU icon from the editor, independent of the selected theme. Its Lucide license is included in `public/icons/`.
 
+
 Board pinouts are served locally from `public/boards/`, with attribution in the app and original image URLs in `sources.json`. See [third-party notices](THIRD_PARTY_NOTICES.md).
