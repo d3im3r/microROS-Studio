@@ -34,10 +34,12 @@ function hasValidDatabaseUrl(url: string | undefined): url is string {
 
 function getDatabase() {
   const connectionString = process.env.DATABASE_URL?.trim();
-  if (hasValidDatabaseUrl(connectionString)) {
+  const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+  if (!process.env.NEXT_E2E && !isBuildPhase && hasValidDatabaseUrl(connectionString)) {
+    const normalizedConnectionString = connectionString.replace(/:(\[)([^\][]+)(\])@/, ":$2@");
     if (!globalForAuth.__microrosPgPool) {
       globalForAuth.__microrosPgPool = new Pool({
-        connectionString,
+        connectionString: normalizedConnectionString,
         max: 10,
         idleTimeoutMillis: 30000,
       });

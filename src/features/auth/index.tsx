@@ -298,6 +298,7 @@ export function ProtectedStudio({
 }) {
   const { translate } = useLanguage();
   const { data: session, isPending, refetch } = useSession();
+  const [initialCheckDone, setInitialCheckDone] = useState(e2eDefaultAuth);
   const [requireAuthInE2E, setRequireAuthInE2E] = useState(() => {
     if (!e2eDefaultAuth) return true;
     try {
@@ -306,6 +307,10 @@ export function ProtectedStudio({
       return false;
     }
   });
+
+  useEffect(() => {
+    if (!isPending) setInitialCheckDone(true);
+  }, [isPending]);
 
   useEffect(() => {
     if (!e2eDefaultAuth) return;
@@ -322,8 +327,10 @@ export function ProtectedStudio({
     } catch {
       /* ignore */
     }
+    if (session?.user) {
+      await signOut();
+    }
     setRequireAuthInE2E(true);
-    await signOut();
   }
 
   if (session?.user) {
@@ -348,7 +355,7 @@ export function ProtectedStudio({
     });
   }
 
-  if (isPending) {
+  if (!initialCheckDone && isPending) {
     return (
       <main className="grid min-h-screen place-items-center text-secondary dark:text-primary">
         {translate("Loading microROS Studio…")}
