@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ShieldAlert, ShieldCheck, UserCheck, UserX, X, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { useLanguage } from "../language";
@@ -25,6 +25,7 @@ export function AdminPanelDialog({
   currentUserEmail: string;
 }) {
   const { translate } = useLanguage();
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -53,9 +54,21 @@ export function AdminPanelDialog({
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      void loadUsers();
+    const el = dialogRef.current;
+    if (!isOpen) {
+      if (el?.open) el.close();
+      return;
     }
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    if (el && !el.open) {
+      el.showModal();
+    }
+    void loadUsers();
+    return () => {
+      document.body.style.overflow = overflow;
+      if (el?.open) el.close();
+    };
   }, [isOpen, loadUsers]);
 
   async function handleApprove(user: AdminUserRecord) {
@@ -102,8 +115,6 @@ export function AdminPanelDialog({
     }
   }
 
-  if (!isOpen) return null;
-
   const filteredUsers = users.filter(
     u =>
       u.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -112,17 +123,19 @@ export function AdminPanelDialog({
 
   return (
     <dialog
-      open
+      ref={dialogRef}
       aria-labelledby="admin-panel-title"
-      className="fixed inset-0 m-auto max-h-[92vh] w-full max-w-3xl border-0 bg-transparent p-4 text-foreground backdrop:bg-black/80"
+      className="fixed inset-0 z-50 m-auto max-h-[92vh] w-full max-w-3xl border-0 bg-transparent p-4 text-foreground backdrop:bg-black/80"
+      onCancel={e => {
+        e.preventDefault();
+        onClose();
+      }}
       onClick={e => {
         if (e.target === e.currentTarget) onClose();
       }}
-      onKeyDown={e => {
-        if (e.key === "Escape") onClose();
-      }}
     >
-      <section className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+      {isOpen && (
+        <section className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
         <header className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="grid size-9 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-secondary dark:text-primary">
@@ -275,6 +288,7 @@ export function AdminPanelDialog({
           )}
         </div>
       </section>
+      )}
     </dialog>
   );
 }

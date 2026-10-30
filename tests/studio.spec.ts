@@ -621,22 +621,54 @@ test("exports/imports JSON, highlights conflicting diagram nodes and enforces Be
 
   // Sign out to trigger Better Auth protection
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Access microROS Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Access microROS Studio" })).toBeVisible({ timeout: 15000 });
 
-  // Register a new user with Better Auth
+  // Register a new user with Better Auth (non-admin -> pending approval by default)
   await page.getByRole("tab", { name: "Create account", exact: true }).click();
   await page.getByLabel("Full name").fill("Ada Lovelace");
   await page.getByLabel("Email").fill("ada@microros.local");
   await page.getByLabel("Password").fill("ros2humble-secret");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
 
-  await expect(page.getByRole("heading", { name: "Build your micro-ROS node" })).toBeVisible();
-
-  // Sign out and sign back in with Better Auth Email & Password
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Access microROS Studio" })).toBeVisible();
+  // Pending user receives approval notification and cannot sign in yet
+  await expect(
+    page.getByText("Registration successful! Your account is pending administrator approval")
+  ).toBeVisible({ timeout: 15000 });
   await page.getByLabel("Email").fill("ada@microros.local");
   await page.getByLabel("Password").fill("ros2humble-secret");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Build your micro-ROS node" })).toBeVisible();
+  await expect(
+    page.getByText("Your account is pending administrator approval")
+  ).toBeVisible({ timeout: 15000 });
+
+  // Admin registers and is immediately granted access
+  await page.getByRole("tab", { name: "Create account", exact: true }).click();
+  await page.getByLabel("Full name").fill("Deimer Miranda");
+  await page.getByLabel("Email").fill("d3im3r@gmail.com");
+  await page.getByLabel("Password").fill("admin-secret-password");
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+
+  // Admin enters the studio and opens the Admin panel
+  await expect(page.getByRole("heading", { name: "Build your micro-ROS node" })).toBeVisible({ timeout: 15000 });
+  const adminPanelBtn = page.getByRole("button", { name: "Admin panel", exact: true });
+  await expect(adminPanelBtn).toBeVisible({ timeout: 15000 });
+  await adminPanelBtn.click();
+
+  // Admin approves Ada Lovelace
+  await expect(page.getByRole("heading", { name: "User management" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("Pending approval")).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "Approve access", exact: true }).click();
+  await expect(page.getByText("Approved").first()).toBeVisible({ timeout: 15000 });
+
+  // Admin closes the panel and signs out
+  await page.getByRole("button", { name: "Close admin panel", exact: true }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Access microROS Studio" })).toBeVisible({ timeout: 15000 });
+
+  // Ada Lovelace signs in successfully now that access was approved
+  await page.getByLabel("Email").fill("ada@microros.local");
+  await page.getByLabel("Password").fill("ros2humble-secret");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Build your micro-ROS node" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("button", { name: "Admin panel", exact: true })).toHaveCount(0);
 });

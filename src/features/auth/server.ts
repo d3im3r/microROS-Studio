@@ -133,11 +133,11 @@ export const auth = betterAuth({
         }
       : undefined,
   plugins: [
-    nextCookies(),
     admin({
       defaultRole: "user",
       adminRoles: ["admin"],
     }),
+    nextCookies(),
   ],
 });
 
