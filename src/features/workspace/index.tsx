@@ -119,17 +119,18 @@ function StudioWorkspace({ user, signOutUser }: { user: AuthUser; signOutUser: (
     setSelected(next.id);
   }
 
-  function addGroup() {
-    if (p.entities.length >= 16 || subs >= 8) return;
+  function addGroup(direction: "publisher" | "subscriber" = "subscriber") {
+    const isPub = direction === "publisher";
+    if (p.entities.length >= 16 || (isPub ? pubs >= 10 : subs >= 8)) return;
     const id = crypto.randomUUID();
     const profile = boardProfile(p.board);
     let suffix = 1;
-    const base = "/actuators_cmd";
+    const base = isPub ? "/sensors_data" : "/actuators_cmd";
     let topicName = base;
     while (p.entities.some(e => e.topic === topicName)) {
       topicName = `${base}_${suffix++}`;
     }
-    const next = createGroupEntity(id, "Twist", topicName, profile.output);
+    const next = createGroupEntity(id, "Twist", topicName, direction, profile[isPub ? "adc" : "output"]);
     update({ entities: [...p.entities, next] });
     setSelected(id);
   }
@@ -310,9 +311,13 @@ function StudioWorkspace({ user, signOutUser }: { user: AuthUser; signOutUser: (
                 <Plus />
                 {translate("Subscriber")}
               </Button>
-              <Button variant="outline" size="sm" disabled={p.entities.length >= 16 || subs >= 8} onClick={addGroup}>
+              <Button variant="outline" size="sm" disabled={p.entities.length >= 16 || subs >= 8} onClick={() => addGroup("subscriber")}>
                 <Layers />
-                {translate("Actuator group")}
+                {translate("Actuator group (DEMUX)")}
+              </Button>
+              <Button variant="outline" size="sm" disabled={p.entities.length >= 16 || pubs >= 10} onClick={() => addGroup("publisher")}>
+                <Layers />
+                {translate("Sensor group (MUX)")}
               </Button>
               {wizardStep > 0 && <BoardHelp board={p.board} />}
             </div>

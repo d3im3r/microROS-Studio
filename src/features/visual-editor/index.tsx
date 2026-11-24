@@ -15,17 +15,38 @@ function GroupNode({ data, selected }: NodeProps) {
   const project = data.project as Project;
   const onUpdate = data.onUpdate as ((entity: GroupEntity) => void) | undefined;
   const profile = boardProfile(project.board);
+  const isPub = (entity.direction ?? "subscriber") === "publisher";
   const hasError = Boolean(data.hasError);
   const errorText = data.errorText ? String(data.errorText) : "";
   const color = hasError ? "var(--destructive)" : selected ? "var(--primary)" : "var(--border)";
 
+  function toggleDirection(newDir: "publisher" | "subscriber") {
+    if (!onUpdate || newDir === (entity.direction ?? "subscriber")) return;
+    const defaultTopic = newDir === "publisher" ? "/sensors_data" : "/actuators_cmd";
+    onUpdate({
+      ...entity,
+      direction: newDir,
+      topic: defaultTopic,
+      period: newDir === "publisher" ? (entity.period ?? 100) : entity.period,
+      channels: defaultGroupChannels(entity.message, newDir, profile[newDir === "publisher" ? "adc" : "output"])
+    });
+  }
+
   function changeMsg(msg: "Twist" | "Vector3") {
     if (!onUpdate || msg === entity.message) return;
+    const dir = entity.direction ?? "subscriber";
     onUpdate({
       ...entity,
       message: msg,
-      channels: defaultGroupChannels(msg, profile.output)
+      channels: defaultGroupChannels(msg, dir, profile[dir === "publisher" ? "adc" : "output"])
     });
+  }
+
+  function changeChannelSource(idx: number, source: GroupChannel["source"]) {
+    if (!onUpdate) return;
+    const next = [...entity.channels];
+    next[idx] = { ...next[idx], source };
+    onUpdate({ ...entity, channels: next });
   }
 
   function changeChannelTarget(idx: number, target: GroupChannel["target"]) {
@@ -49,13 +70,18 @@ function GroupNode({ data, selected }: NodeProps) {
       style={{ borderColor: color, width: 330 }}
       className="rounded-xl border-2 bg-card/95 shadow-xl backdrop-blur-sm"
     >
-      <Handle type="target" position={Position.Left} />
-      <div className="flex items-center justify-between border-b border-border bg-muted/40 px-3.5 py-2">
-        <div className="flex items-center gap-2">
-          <Layers size={15} className="text-secondary dark:text-primary" />
-          <span className="text-[10px] font-bold tracking-wider text-secondary dark:text-primary">
-            {translate("ACTUATOR GROUP")}
-          </span>
+      {!isPub && <Handle type="target" position={Position.Left} />}
+      <div className="flex items-center justify-between border-b border-border bg-muted/40 px-3 py-2">
+        <div className="flex items-center gap-1.5">
+          <Layers size={15} className={isPub ? "text-primary" : "text-secondary dark:text-primary"} />
+          <select
+            className="nodrag nopan rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] font-bold text-foreground"
+            value={isPub ? "publisher" : "subscriber"}
+            onChange={e => toggleDirection(e.target.value as "publisher" | "subscriber")}
+          >
+            <option value="subscriber">DEMUX · OUT</option>
+            <option value="publisher">MUX · IN</option>
+          </select>
           {hasError && <TriangleAlert size={13} className="text-destructive shrink-0" />}
         </div>
         <select
@@ -63,8 +89,8 @@ function GroupNode({ data, selected }: NodeProps) {
           value={entity.message}
           onChange={e => changeMsg(e.target.value as "Twist" | "Vector3")}
         >
-          <option value="Twist">geometry_msgs / Twist</option>
-          <option value="Vector3">geometry_msgs / Vector3</option>
+          <option value="Twist">Twist</option>
+          <option value="Vector3">Vector3</option>
         </select>
       </div>
 
@@ -73,52 +99,87 @@ function GroupNode({ data, selected }: NodeProps) {
           {entity.topic}
         </span>
         <span className="text-muted-foreground">
-          {entity.channels.filter(c => c.target !== "disabled").length} {translate("active")}
+          {entity.channels.filter(c => isPub ? (c.source && c.source !== "disabled") : (c.target && c.target !== "disabled")).length} {translate("active")}
         </span>
       </div>
 
       <div className="p-2 space-y-1.5 max-h-[220px] overflow-y-auto">
-        {entity.channels.map((ch, idx) => (
-          <div
-            key={ch.field}
-            className={`flex items-center justify-between gap-1.5 rounded-md border p-1 text-[11px] ${
-              ch.target === "disabled"
-                ? "border-dashed border-border/50 bg-muted/20 opacity-50"
-                : "border-border bg-background shadow-xs"
-            }`}
-          >
-            <span className="font-mono text-[10px] font-medium text-foreground min-w-[55px] truncate" title={ch.field}>
-              {ch.field}
-            </span>
-            <select
-              className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 text-[10px] text-foreground"
-              value={ch.target}
-              onChange={e => changeChannelTarget(idx, e.target.value as GroupChannel["target"])}
+        {entity.channels.map((ch, idx) => {
+          const isDisabled = isPub ? (!ch.source || ch.source === "disabled") : (!ch.target || ch.target === "disabled");
+          return (
+            <div
+              key={ch.field}
+              className={`flex items-center justify-between gap-1.5 rounded-md border p-1 text-[11px] ${
+                isDisabled
+                  ? "border-dashed border-border/50 bg-muted/20 opacity-50"
+                  : "border-border bg-background shadow-xs"
+              }`}
             >
-              <option value="servo">{translate("Servo (50 Hz)")}</option>
-              <option value="pwm">{translate("PWM (1 kHz)")}</option>
-              <option value="digital">{translate("Digital")}</option>
-              <option value="disabled">{translate("Disabled")}</option>
-            </select>
-            {ch.target !== "disabled" ? (
-              <select
-                className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 font-mono text-[10px] text-foreground"
-                value={ch.pin}
-                onChange={e => changeChannelPin(idx, Number(e.target.value))}
-              >
-                {profile.output.map(pin => (
-                  <option key={pin} value={pin}>
-                    GPIO {pin}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="text-[10px] text-muted-foreground italic px-1.5">—</span>
-            )}
-          </div>
-        ))}
+              <span className="font-mono text-[10px] font-medium text-foreground min-w-[55px] truncate" title={ch.field}>
+                {ch.field}
+              </span>
+
+              {isPub ? (
+                <>
+                  <select
+                    className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 text-[10px] text-foreground"
+                    value={ch.source ?? "disabled"}
+                    onChange={e => changeChannelSource(idx, e.target.value as GroupChannel["source"])}
+                  >
+                    <option value="adc">{translate("ADC (Analog)")}</option>
+                    <option value="digital">{translate("Digital In")}</option>
+                    <option value="disabled">{translate("Disabled")}</option>
+                  </select>
+                  {ch.source && ch.source !== "disabled" ? (
+                    <select
+                      className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 font-mono text-[10px] text-foreground"
+                      value={ch.pin}
+                      onChange={e => changeChannelPin(idx, Number(e.target.value))}
+                    >
+                      {(ch.source === "adc" ? profile.adc : profile.input).map(pin => (
+                        <option key={pin} value={pin}>
+                          GPIO {pin}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground italic px-1.5">—</span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <select
+                    className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 text-[10px] text-foreground"
+                    value={ch.target ?? "disabled"}
+                    onChange={e => changeChannelTarget(idx, e.target.value as GroupChannel["target"])}
+                  >
+                    <option value="servo">{translate("Servo (50 Hz)")}</option>
+                    <option value="pwm">{translate("PWM (1 kHz)")}</option>
+                    <option value="digital">{translate("Digital")}</option>
+                    <option value="disabled">{translate("Disabled")}</option>
+                  </select>
+                  {ch.target && ch.target !== "disabled" ? (
+                    <select
+                      className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 font-mono text-[10px] text-foreground"
+                      value={ch.pin}
+                      onChange={e => changeChannelPin(idx, Number(e.target.value))}
+                    >
+                      {profile.output.map(pin => (
+                        <option key={pin} value={pin}>
+                          GPIO {pin}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground italic px-1.5">—</span>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
-      <Handle type="source" position={Position.Right} />
+      {isPub && <Handle type="source" position={Position.Right} />}
     </div>
   );
 }
@@ -253,11 +314,11 @@ export function VisualEditor({ project, selected, onSelect, onUpdate }: { projec
         next.push({
           id: entity.id,
           type: "program",
-          position: { x: 55, y },
+          position: { x: pub ? 410 : 55, y },
           selected: entity.id === selected,
           data: {
-            kind: "subscriber",
-            label: "SUBSCRIBER",
+            kind: pub ? "publisher" : "subscriber",
+            label: pub ? "PUBLISHER" : "SUBSCRIBER",
             title: entity.topic,
             detail: `geometry_msgs / ${entity.message}`,
             hasError,
@@ -267,7 +328,7 @@ export function VisualEditor({ project, selected, onSelect, onUpdate }: { projec
         next.push({
           id: `${entity.id}:behavior`,
           type: "group",
-          position: { x: 350, y },
+          position: { x: pub ? 55 : 350, y },
           selected: entity.id === selected,
           data: {
             entity,

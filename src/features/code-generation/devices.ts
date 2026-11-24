@@ -5,7 +5,7 @@ import type { Fragment } from "./robot";
 export function pwmAssignments(p: Project): number[][] {
   const servoCount = p.entities.reduce((count, e) => {
     if (e.kind === "device" && e.device === "servo") return count + 1;
-    if (e.kind === "group") return count + e.channels.filter(c => c.target === "servo").length;
+    if (e.kind === "group" && (e.direction ?? "subscriber") === "subscriber") return count + e.channels.filter(c => c.target === "servo").length;
     return count;
   }, 0);
   const servoReservation = Math.max(2, Math.ceil(servoCount / 2) * 2);
@@ -14,6 +14,7 @@ export function pwmAssignments(p: Project): number[][] {
   return p.entities.map(e => {
     if (e.kind === "robot" && e.behavior === "motor-pwm") return [pwm++];
     if (e.kind === "group") {
+      if ((e.direction ?? "subscriber") === "publisher") return [];
       return e.channels
         .filter(c => c.target === "servo" || c.target === "pwm")
         .map(c => c.target === "servo" ? servo++ : pwm++);
@@ -26,6 +27,52 @@ export function pwmAssignments(p: Project): number[][] {
 export function groupFragment(e: GroupEntity, i: number, channels: number[], board: BoardProfile = boardProfile("denky32"), instance = 1): Fragment {
   const pkg = "geometry_msgs";
   const msgType = e.message;
+  const isPub = (e.direction ?? "subscriber") === "publisher";
+
+  if (isPub) {
+    const f: Fragment = {
+      includes: [`#include <${pkg}/msg/${msgType.toLowerCase()}.h>`],
+      dependencies: [],
+      declarations: `${pkg}__msg__${msgType} msg_${i};\nrcl_publisher_t pub_${i};\nrcl_timer_t timer_${i};`,
+      hardware: "",
+      callbacks: "",
+      loop: "",
+      setup: `    ok = ros.createPublisher(pub_${i}, ROSIDL_GET_MSG_TYPE_SUPPORT(${pkg}, msg, ${msgType}), ${cppString(e.topic)});\n    ros.require(ok, ${cppString(`Failed to create publisher ${e.topic}`)});\n    ok = ros.createTimer(timer_${i}, ${e.period ?? 100}, timer_callback_${i});\n    ros.require(ok, ${cppString(`Failed to create timer ${e.topic}`)});`
+    };
+
+    const hardwareLines: string[] = [];
+    const readLines: string[] = [];
+    let hasAdc = false;
+
+    for (const ch of e.channels) {
+      const fieldAccess = msgType === "Twist"
+        ? (ch.field.startsWith("linear.") || ch.field.startsWith("angular.") ? `msg_${i}.${ch.field}` : `msg_${i}.linear.${ch.field}`)
+        : `msg_${i}.${ch.field}`;
+
+      if (!ch.source || ch.source === "disabled") {
+        readLines.push(`    ${fieldAccess} = 0.0f;`);
+        continue;
+      }
+      const pName = pinName(e, instance, ch.field);
+      if (ch.source === "adc") {
+        hasAdc = true;
+        hardwareLines.push(`    pinMode(${pName}, INPUT);`);
+        readLines.push(`    ${fieldAccess} = static_cast<double>(analogRead(${pName}));`);
+      } else if (ch.source === "digital") {
+        const pullup = board.family === "esp32" && ch.pin >= 34 ? "INPUT" : "INPUT_PULLUP";
+        hardwareLines.push(`    pinMode(${pName}, ${pullup});`);
+        const condition = ch.activeLow ? "== LOW" : "== HIGH";
+        readLines.push(`    ${fieldAccess} = (digitalRead(${pName}) ${condition}) ? 1.0 : 0.0;`);
+      }
+    }
+    if (hasAdc) {
+      hardwareLines.unshift(`    analogReadResolution(12);`);
+    }
+    f.hardware = hardwareLines.join("\n");
+    f.callbacks = `void timer_callback_${i}(rcl_timer_t * timer, int64_t last_call_time) {\n    (void) last_call_time;\n    if (!timer) return;\n${readLines.join("\n")}\n    if (!ros.publish(pub_${i}, &msg_${i})) ros.info(${cppString(`Failed to publish ${e.topic}`)});\n}`;
+    return f;
+  }
+
   const bits = board.servoBits, scale = 2 ** bits - 1;
   const f: Fragment = {
     includes: [`#include <${pkg}/msg/${msgType.toLowerCase()}.h>`, "#include <math.h>"],

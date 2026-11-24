@@ -45,6 +45,9 @@ Build a micro-ROS application through a guided hardware wizard and a visual prog
 - Device-based GPIO constants for all hardware profiles, including the shared I2C bus.
 - Responsive panels, wrapping controls and a footer that stays aligned as the viewport changes.
 - Passive buzzer frequency commands with independent PWM timer allocation.
+- Multichannel grouping (MUX & DEMUX) for sensor aggregation and actuator dispatch with `geometry_msgs/Twist` and `Vector3`.
+- Expanded middleware capacity: up to 8 subscribers, 10 publishers, and 16 total entities.
+- Up to 4 simultaneous servos with dynamic LEDC timer pair reservations.
 
 The starter program publishes `/counter` every second and subscribes to `/led` using `std_msgs/Bool`. Suggested node names end in `_node`, and topics start with `/`. The UDP Agent port is fixed at **8888**.
 
@@ -78,6 +81,14 @@ pinMode(led1, OUTPUT);
 const uint8_t driver_tb1_IN4 = 16;
 pinMode(driver_tb1_IN4, OUTPUT);
 ```
+
+### Multichannel MUX & DEMUX Grouping
+
+In robotics, subscribing to a separate ROS 2 topic for each actuator or publishing individual topics for every sensor quickly exhausts the micro-ROS executor handles and floods network bandwidth:
+
+- **Actuator group (DEMUX / Subscriber):** Receives a single `geometry_msgs/Twist` (6 channels) or `Vector3` (3 channels) message and synchronously commands multiple 50 Hz PWM servos, 1 kHz PWM channels, and digital outputs. Uses only **1 subscriber handle**.
+- **Sensor group (MUX / Publisher):** Reads multiple ADC1 analog pins (potentiometers, analog sensors, battery voltage) and digital inputs with pull-ups in the exact same tick, publishing them packed in one ROS 2 message. Uses only **1 publisher handle and 1 timer**.
+- **Visual Editing & Coexistence:** Interactive controls directly inside the React Flow diagram allow switching modes, assigning fields and selecting GPIOs. Groups operate seamlessly alongside dedicated catalog devices (e.g. L298N motor drivers, quadrature encoders, joysticks, OLED screens) with zero pin or PWM timer collisions.
 
 ## Run locally
 

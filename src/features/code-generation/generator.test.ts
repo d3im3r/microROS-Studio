@@ -866,6 +866,8 @@ test("C++ runtime: multichannel actuator group (Twist) controls servos, PWM and 
     const group: GroupEntity = {
       id: "group1",
       kind: "group",
+      direction: "subscriber",
+      period: 100,
       topic: "/arm_cmd",
       message: "Twist",
       channels: [
@@ -938,6 +940,180 @@ int main() {
 `;
     writeFileSync(join(dir, "main.cpp"), main + harness);
     const binary = join(dir, "group_actuators");
+    const compiled = spawnSync("g++", ["-std=c++17", "-DTEST_CAPTURE_LOGS", "-DMICRO_ROS_TRANSPORT_ARDUINO_WIFI", "-I", dir, join(dir, "main.cpp"), "-o", binary], { encoding: "utf8" });
+    assert.equal(compiled.status, 0, compiled.stderr);
+    const result = spawnSync(binary, [], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("multichannel sensor group (MUX): validation, channels allocation and handle count", () => {
+  const muxGroup = createGroupEntity("mux1", "Twist", "/telemetry", "publisher", [34, 35, 32, 15]);
+  muxGroup.channels = [
+    { field: "linear.x", source: "adc", pin: 34, activeLow: false },
+    { field: "linear.y", source: "adc", pin: 35, activeLow: false },
+    { field: "angular.x", source: "digital", pin: 15, activeLow: false },
+    { field: "linear.z", source: "disabled", pin: 32, activeLow: false },
+    { field: "angular.y", source: "disabled", pin: 33, activeLow: false },
+    { field: "angular.z", source: "disabled", pin: 25, activeLow: false }
+  ];
+
+  const p = {
+    ...defaultProject,
+    entities: [muxGroup]
+  };
+
+  const issues = validateProject(p);
+  assert.deepEqual(issues, []);
+
+  const counts = entityCounts(p);
+  assert.equal(counts.publishers, 1);
+  assert.equal(counts.subscribers, 0);
+  assert.equal(counts.timers, 1);
+
+  // MUX uses no PWM channels
+  const channels = pwmAssignments(p);
+  assert.deepEqual(channels, [[]]);
+
+  const { main } = generateFiles(p);
+  assert.match(main, /rcl_publisher_t pub_0;/);
+  assert.match(main, /rcl_timer_t timer_0;/);
+  assert.match(main, /createPublisher\(pub_0, ROSIDL_GET_MSG_TYPE_SUPPORT\(geometry_msgs, msg, Twist\), "\/telemetry"\)/);
+  assert.match(main, /createTimer\(timer_0, 100, timer_callback_0\)/);
+  assert.match(main, /pinMode\(group1_LINEAR_X, INPUT\)/);
+  assert.match(main, /pinMode\(group1_ANGULAR_X, INPUT_PULLUP\)/);
+  assert.match(main, /msg_0\.linear\.x = static_cast<double>\(analogRead\(group1_LINEAR_X\)\);/);
+  assert.match(main, /msg_0\.angular\.x = \(digitalRead\(group1_ANGULAR_X\) == HIGH\) \? 1\.0 : 0\.0;/);
+  assert.match(main, /msg_0\.linear\.z = 0\.0f;/);
+});
+
+test("C++ runtime: mixed system with MUX, DEMUX, L298N motor driver, encoder and joystick", { skip: spawnSync("g++", ["--version"]).status !== 0 }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "microros-mixed-"));
+  try {
+    copyFileSync("tests/firmware-stubs/Arduino.h", join(dir, "Arduino.h"));
+    for (const file of [
+      "MicroROSHelper.h",
+      "geometry_msgs/msg/twist.h", "geometry_msgs/msg/vector3.h",
+      "std_msgs/msg/int32.h"
+    ]) {
+      const full = join(dir, file);
+      mkdirSync(join(full, ".."), { recursive: true });
+      writeFileSync(full, "#pragma once\n");
+    }
+
+    const l298n = createDevice("l298n", "motors");
+    l298n.pins = { pwmA: 25, in1: 26, in2: 27, pwmB: 14, in3: 12, in4: 13 };
+
+    const encoder = createDevice("encoder", "enc");
+    encoder.pins = { a: 18, b: 19 };
+
+    const joy = createDevice("joystick", "joy");
+    joy.pins = { x: 34, y: 35, button: 4 };
+
+    const demux: GroupEntity = {
+      id: "arm_demux",
+      kind: "group",
+      direction: "subscriber",
+      period: 100,
+      topic: "/arm_cmd",
+      message: "Twist",
+      channels: [
+        { field: "linear.x", target: "servo", pin: 16, activeLow: false },
+        { field: "linear.y", target: "servo", pin: 17, activeLow: false },
+        { field: "linear.z", target: "pwm", pin: 5, activeLow: false },
+        { field: "angular.x", target: "digital", pin: 2, activeLow: false },
+        { field: "angular.y", target: "disabled", pin: 21, activeLow: false },
+        { field: "angular.z", target: "disabled", pin: 22, activeLow: false }
+      ]
+    };
+
+    const mux: GroupEntity = {
+      id: "sensors_mux",
+      kind: "group",
+      direction: "publisher",
+      period: 50,
+      topic: "/sensors_mux",
+      message: "Twist",
+      channels: [
+        { field: "linear.x", source: "adc", pin: 36, activeLow: false },
+        { field: "linear.y", source: "adc", pin: 39, activeLow: false },
+        { field: "angular.x", source: "digital", pin: 15, activeLow: true },
+        { field: "linear.z", source: "disabled", pin: 32, activeLow: false },
+        { field: "angular.y", source: "disabled", pin: 33, activeLow: false },
+        { field: "angular.z", source: "disabled", pin: 23, activeLow: false }
+      ]
+    };
+
+    const p = {
+      ...defaultProject,
+      entities: [l298n, encoder, joy, demux, mux]
+    };
+
+    const issues = validateProject(p);
+    assert.deepEqual(issues, []);
+
+    const counts = entityCounts(p);
+    assert.equal(counts.subscribers, 2); // L298N + DEMUX
+    assert.equal(counts.publishers, 3);  // Encoder + Joystick + MUX
+    assert.equal(counts.timers, 3);
+
+    const { main } = generateFiles(p);
+
+    const harness = `
+#include <cassert>
+#include <cmath>
+
+int main() {
+    test_adc_value[36] = 1800; // MUX ADC 1
+    test_adc_value[39] = 3100; // MUX ADC 2
+    test_digital_input[15] = 0; // MUX active-low switch pressed (LOW -> active 1.0)
+
+    setup();
+
+    // Verify initial servo PWM neutral setup
+    const uint32_t neutral = static_cast<uint32_t>(1450.0 * 65535.0 / 20000.0);
+    assert(test_pwm_duty[0] == neutral); // Servo 1 on channel 0
+    assert(test_pwm_duty[1] == neutral); // Servo 2 on channel 1
+
+    // 1. Fire MUX timer callback (entity index 4)
+    rcl_timer_t dummyTimer;
+    timer_callback_4(&dummyTimer, 0);
+    assert(msg_4.linear.x == 1800.0);
+    assert(msg_4.linear.y == 3100.0);
+    assert(msg_4.angular.x == 1.0); // Active-low pressed: LOW yields 1.0
+
+    // 2. Fire DEMUX subscriber callback (entity index 3)
+    geometry_msgs__msg__Twist armCmd;
+    armCmd.linear.x = 45.0;  // 45 deg servo
+    armCmd.linear.y = 135.0; // 135 deg servo
+    armCmd.linear.z = 150.0; // PWM duty 150
+    armCmd.angular.x = 1.0;  // Digital gripper HIGH
+    subscription_callback_3(&armCmd);
+
+    const uint32_t duty_45 = static_cast<uint32_t>((500.0 + 45.0 * (1900.0 / 180.0)) * 65535.0 / 20000.0);
+    const uint32_t duty_135 = static_cast<uint32_t>((500.0 + 135.0 * (1900.0 / 180.0)) * 65535.0 / 20000.0);
+    assert(test_pwm_duty[0] == duty_45);
+    assert(test_pwm_duty[1] == duty_135);
+    assert(test_pwm_duty[4] == 150); // PWM on channel 4
+    assert(test_gpio_state[2] == 1); // Gripper pin 2 HIGH
+
+    // 3. Fire Motor driver L298N subscriber callback (entity index 0)
+    geometry_msgs__msg__Vector3 motorCmd;
+    motorCmd.x = 80.0;  // 80% forward
+    motorCmd.y = -50.0; // 50% backward
+    subscription_callback_0(&motorCmd);
+
+    // Channels 2 and 3 are allocated to L298N motors
+    assert(test_pwm_duty[2] == static_cast<uint32_t>(80.0 * 255.0 / 100.0));
+    assert(test_pwm_duty[3] == static_cast<uint32_t>(50.0 * 255.0 / 100.0));
+
+    return 0;
+}
+`;
+    writeFileSync(join(dir, "main.cpp"), main + harness);
+    const binary = join(dir, "mixed_system");
     const compiled = spawnSync("g++", ["-std=c++17", "-DTEST_CAPTURE_LOGS", "-DMICRO_ROS_TRANSPORT_ARDUINO_WIFI", "-I", dir, join(dir, "main.cpp"), "-o", binary], { encoding: "utf8" });
     assert.equal(compiled.status, 0, compiled.stderr);
     const result = spawnSync(binary, [], { encoding: "utf8" });

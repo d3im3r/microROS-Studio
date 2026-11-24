@@ -28,37 +28,65 @@ const subscriber = z.object({
 });
 export const groupChannelSchema = z.object({
   field: z.string(),
-  target: z.enum(["servo", "pwm", "digital", "disabled"]),
+  target: z.enum(["servo", "pwm", "digital", "disabled"]).optional(),
+  source: z.enum(["adc", "digital", "disabled"]).optional(),
   pin: z.number().int().min(0).max(48),
   activeLow: z.boolean().default(false)
 });
 export const groupSchema = z.object({
   id: z.string().min(1),
   kind: z.literal("group"),
+  direction: z.enum(["publisher", "subscriber"]).default("subscriber"),
+  period: z.number().int().min(20).max(3600000).default(100),
   topic,
   message: z.enum(["Twist", "Vector3"]),
   channels: z.array(groupChannelSchema)
 });
 export type GroupChannel = z.infer<typeof groupChannelSchema>;
 export type GroupEntity = z.infer<typeof groupSchema>;
-export function defaultGroupChannels(message: "Twist" | "Vector3", outputPinsList: number[] = [13, 14, 15, 16, 17, 18]): GroupChannel[] {
+export function defaultGroupChannels(
+  message: "Twist" | "Vector3",
+  direction: "publisher" | "subscriber" = "subscriber",
+  outputPinsList?: number[]
+): GroupChannel[] {
   const fields = message === "Twist"
     ? ["linear.x", "linear.y", "linear.z", "angular.x", "angular.y", "angular.z"]
     : ["x", "y", "z"];
+  if (direction === "publisher") {
+    const pins = outputPinsList ?? [34, 35, 32, 33, 25, 26];
+    return fields.map((field, idx) => ({
+      field,
+      source: (idx < (message === "Twist" ? 3 : 2) ? "adc" : idx === 3 ? "digital" : "disabled") as "adc" | "digital" | "disabled",
+      pin: pins[idx % pins.length] ?? 34,
+      activeLow: false
+    }));
+  }
+  const pins = outputPinsList ?? [13, 14, 15, 16, 17, 18];
   return fields.map((field, idx) => ({
     field,
     target: (idx < (message === "Twist" ? 4 : 3) ? "servo" : "disabled") as "servo" | "disabled",
-    pin: outputPinsList[idx % outputPinsList.length] ?? 13,
+    pin: pins[idx % pins.length] ?? 13,
     activeLow: false
   }));
 }
-export function createGroupEntity(id: string, message: "Twist" | "Vector3" = "Twist", topic = "/actuators_cmd", outputPinsList?: number[]): GroupEntity {
+export function createGroupEntity(
+  id: string,
+  message: "Twist" | "Vector3" = "Twist",
+  topic?: string,
+  directionOrPins?: "publisher" | "subscriber" | number[],
+  outputPinsList?: number[]
+): GroupEntity {
+  const direction = typeof directionOrPins === "string" ? directionOrPins : "subscriber";
+  const pins = Array.isArray(directionOrPins) ? directionOrPins : outputPinsList;
+  const defaultTopic = topic ?? (direction === "publisher" ? "/sensors_data" : "/actuators_cmd");
   return {
     id,
     kind: "group",
-    topic,
+    direction,
+    period: 100,
+    topic: defaultTopic,
     message,
-    channels: defaultGroupChannels(message, outputPinsList)
+    channels: defaultGroupChannels(message, direction, pins)
   };
 }
 export const projectSchema = z.object({
@@ -98,10 +126,15 @@ export const projectSchema = z.object({
     if (e.kind === "robot") { if (robotDefinitions[e.behavior].direction === "publisher") pubs++; else subs++; if (e.behavior === "differential") pubs++; if(e.behavior === "motor-pwm")generalPwm++; }
     if (e.kind === "device") { if (devices[e.device].direction === "publisher") pubs++; else subs++; if(e.device === "servo")servos++;else generalPwm+=pwmCount(e); }
     if (e.kind === "group") {
-      subs++;
-      for (const ch of e.channels) {
-        if (ch.target === "servo") servos++;
-        else if (ch.target === "pwm") generalPwm++;
+      const isPub = (e.direction ?? "subscriber") === "publisher";
+      if (isPub) {
+        pubs++;
+      } else {
+        subs++;
+        for (const ch of e.channels) {
+          if (ch.target === "servo") servos++;
+          else if (ch.target === "pwm") generalPwm++;
+        }
       }
     }
     const assigned = e.kind === "device" ? ((devices[e.device] as DeviceDefinition).addresses ? [e.address!] : []) : e.kind === "robot" ? (e.behavior === "imu-yaw" ? [0x28] : e.behavior === "tof-triple" ? [0x30,0x31,0x32] : []) : [];
@@ -123,17 +156,33 @@ export const projectSchema = z.object({
     }
     if (ids.has(e.id)) ctx.addIssue({ code: "custom", message: "Some entities have duplicate IDs." });
     ids.add(e.id);
-    const title = e.kind === "device" ? devices[e.device].title : e.kind === "robot" ? robotDefinitions[e.behavior].title : e.kind === "group" ? "Actuator group" : e.kind === "subscriber" ? "LED / digital output" : "Publisher";
+    const isGroupPub = e.kind === "group" && (e.direction ?? "subscriber") === "publisher";
+    const title = e.kind === "device" ? devices[e.device].title : e.kind === "robot" ? robotDefinitions[e.behavior].title : e.kind === "group" ? (isGroupPub ? "Sensor group" : "Actuator group") : e.kind === "subscriber" ? "LED / digital output" : "Publisher";
     const owner = `${title} (${e.topic})`;
     if(e.kind==="device"&&e.device==="touch"&&!boardPins(p.board,"touch").length)ctx.addIssue({code:"custom",path:["entities",i],message:`Touch unavailable on ${board.title}.`});
     const used = e.kind === "device"
       ? devices[e.device].pins.filter(role=>!(role.optional&&e.pins[role.key]===-1)).map(role=>({pin:e.pins[role.key],label:role.label}))
       : e.kind === "group"
-      ? e.channels.filter(ch => ch.target !== "disabled").map(ch => ({ pin: ch.pin, label: `${ch.field} (${ch.target})` }))
+      ? (isGroupPub
+          ? e.channels.filter(ch => ch.source && ch.source !== "disabled").map(ch => ({ pin: ch.pin, label: `${ch.field} (${ch.source})` }))
+          : e.channels.filter(ch => ch.target && ch.target !== "disabled").map(ch => ({ pin: ch.pin, label: `${ch.field} (${ch.target})` })))
       : (e.kind === "subscriber" ? [e.pin] : e.kind === "robot" ? robotPins(e) : []).map((pin,index)=>({pin,label:`pin ${index+1}`}));
     for (const {pin,label} of used) {
       const current = `${owner} · ${label}`;
-      const mode = e.kind === "device" ? devices[e.device].pins.find(role=>role.label===label)!.mode : e.kind === "robot" && e.behavior === "wheel-encoders" ? "input" : "output";
+      let mode: "input" | "output" | "adc" | "pwm" | "touch" = "output";
+      if (e.kind === "device") {
+        mode = devices[e.device].pins.find(role=>role.label===label)!.mode;
+      } else if (e.kind === "robot" && e.behavior === "wheel-encoders") {
+        mode = "input";
+      } else if (e.kind === "group") {
+        if (isGroupPub) {
+          const ch = e.channels.find(c => c.pin === pin);
+          mode = ch?.source === "adc" ? "adc" : "input";
+        } else {
+          const ch = e.channels.find(c => c.pin === pin);
+          mode = ch?.target === "digital" ? "output" : "pwm";
+        }
+      }
       if (!boardPins(p.board, mode).includes(pin)) ctx.addIssue({code:"custom",path:["entities",i],message:`${current}: GPIO ${pin} unavailable for ${mode === "adc" ? "ADC1" : mode === "input" ? "input" : "output"} on ${board.title}.`});
       if (pins.has(pin)) ctx.addIssue({ code: "custom", path: ["entities", i], message: `GPIO ${pin} conflict: ${pinOwners.get(pin) ?? "reserved resource"} and ${current}. Assign a different GPIO.` });
       else pinOwners.set(pin,current);
@@ -201,10 +250,13 @@ export function validateEntityIssues(project: Project): Record<string, string[]>
     if (e.kind === "device" && e.device === "vl53l0x" && e.pins.xshut === -1 && (vlSensors.length > 1 || e.address !== 0x29)) {
       add(e.id, "VL53L0X: without XSHUT, use a single sensor at address 0x29. Multiple sensors require separate XSHUT pins.");
     }
+    const isGroupPub = e.kind === "group" && (e.direction ?? "subscriber") === "publisher";
     const usedPins = e.kind === "device"
       ? devices[e.device].pins.filter(role => !(role.optional && e.pins[role.key] === -1)).map(role => e.pins[role.key])
       : e.kind === "group"
-      ? e.channels.filter(ch => ch.target !== "disabled").map(ch => ch.pin)
+      ? (isGroupPub
+          ? e.channels.filter(ch => ch.source && ch.source !== "disabled").map(ch => ch.pin)
+          : e.channels.filter(ch => ch.target && ch.target !== "disabled").map(ch => ch.pin))
       : e.kind === "subscriber" ? [e.pin] : e.kind === "robot" ? robotPins(e) : [];
     for (const pin of usedPins) {
       if (pinOwners.has(pin)) {
@@ -217,9 +269,9 @@ export function validateEntityIssues(project: Project): Record<string, string[]>
 }
 export function handles(project: Project) { return project.entities.length; }
 
-export function entityDirection(e: Entity): "publisher" | "subscriber" { return e.kind === "device" ? devices[e.device].direction : e.kind === "robot" ? robotDefinitions[e.behavior].direction : e.kind === "group" ? "subscriber" : e.kind; }
+export function entityDirection(e: Entity): "publisher" | "subscriber" { return e.kind === "device" ? devices[e.device].direction : e.kind === "robot" ? robotDefinitions[e.behavior].direction : e.kind === "group" ? (e.direction ?? "subscriber") : e.kind; }
 export function entityMessage(e: Entity): string { return e.kind === "device" ? devices[e.device].message : e.kind === "robot" ? robotDefinitions[e.behavior].message : e.kind === "group" ? e.message : e.kind === "publisher" ? e.message : "Bool"; }
-export function entityTitle(e: Entity): string { return e.kind === "device" ? devices[e.device].title : e.kind === "robot" ? robotDefinitions[e.behavior].title : e.kind === "group" ? "Actuator group" : e.kind === "subscriber" ? "LED / digital output" : e.behavior === "counter" ? "Counter" : "Periodic publication"; }
+export function entityTitle(e: Entity): string { return e.kind === "device" ? devices[e.device].title : e.kind === "robot" ? robotDefinitions[e.behavior].title : e.kind === "group" ? ((e.direction ?? "subscriber") === "publisher" ? "Sensor group" : "Actuator group") : e.kind === "subscriber" ? "LED / digital output" : e.behavior === "counter" ? "Counter" : "Periodic publication"; }
 export function entityCounts(p: Project) { return { publishers: p.entities.filter(e => entityDirection(e) === "publisher").length + p.entities.filter(e=>e.kind === "robot"&&e.behavior === "differential").length, subscribers: p.entities.filter(e => entityDirection(e) === "subscriber").length, timers: p.entities.filter(e=>entityDirection(e) === "publisher").length }; }
 
 export function suggestNodeName(value:string){const name=value.trim().replace(/[^a-zA-Z0-9_]/g,"_");const safe=/^[a-zA-Z_]/.test(name)?name:`node_${name}`;return safe.endsWith("_node")?safe:`${safe}_node`;}

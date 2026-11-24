@@ -28,8 +28,10 @@ inline void portENTER_CRITICAL(int*) {}
 inline void portEXIT_CRITICAL(int*) {}
 inline void pinMode(int,int) {}
 inline int test_gpio_state[48] = {};
+inline int test_adc_value[48] = {};
+inline int test_digital_input[48] = {};
 inline void digitalWrite(int pin, int val) { if (pin >= 0 && pin < 48) test_gpio_state[pin] = val; }
-inline bool digitalRead(int) { return false; }
+inline bool digitalRead(int pin) { return (pin >= 0 && pin < 48) ? (test_digital_input[pin] != 0) : false; }
 inline uint32_t millis() { return test_clock_ms; }
 inline void delay(int ms) { if(static_cast<unsigned>(ms)>test_max_delay_ms)test_max_delay_ms=ms; }
 inline void delayMicroseconds(int) {}
@@ -81,7 +83,7 @@ struct VL53L0X_RangingMeasurementData_t { int RangeStatus = 0, RangeMilliMeter =
 struct Adafruit_VL53L0X { bool begin(int) {return true;} void rangingTest(VL53L0X_RangingMeasurementData_t*,bool) {} };
 
 inline void analogReadResolution(int) {}
-inline int analogRead(int) { return 2048; }
+inline int analogRead(int pin) { return (pin >= 0 && pin < 48 && test_adc_value[pin]) ? test_adc_value[pin] : 2048; }
 inline unsigned long pulseIn(int,int,unsigned long) { return 1000; }
 #define MPU6050_RANGE_8_G 0
 #define MPU6050_BAND_21_HZ 0
