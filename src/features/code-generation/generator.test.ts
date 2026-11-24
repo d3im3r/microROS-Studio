@@ -1141,15 +1141,16 @@ test("multichannel groups support specialized sensors (LM35, touch, internal tem
       id: "demux_specialized",
       kind: "group",
       direction: "subscriber",
+      period: 100,
       topic: "/actuators_cmd",
       message: "Twist",
       channels: [
-        { field: "linear.x", target: "buzzer", pin: 18 },
-        { field: "linear.y", target: "servo", pin: 19 },
-        { field: "linear.z", target: "digital", pin: 21 },
-        { field: "angular.x", target: "disabled", pin: 22 },
-        { field: "angular.y", target: "disabled", pin: 23 },
-        { field: "angular.z", target: "disabled", pin: 25 }
+        { field: "linear.x", target: "buzzer", pin: 18, activeLow: false },
+        { field: "linear.y", target: "servo", pin: 19, activeLow: false },
+        { field: "linear.z", target: "digital", pin: 21, activeLow: false },
+        { field: "angular.x", target: "disabled", pin: 22, activeLow: false },
+        { field: "angular.y", target: "disabled", pin: 23, activeLow: false },
+        { field: "angular.z", target: "disabled", pin: 25, activeLow: false }
       ]
     };
 
@@ -1161,12 +1162,12 @@ test("multichannel groups support specialized sensors (LM35, touch, internal tem
       message: "Twist",
       period: 100,
       channels: [
-        { field: "linear.x", source: "lm35", pin: 34 },
-        { field: "linear.y", source: "touch", pin: 4 },
-        { field: "linear.z", source: "internal-temperature", pin: -1 },
-        { field: "angular.x", source: "hcsr04", pin: 5, echoPin: 17 },
-        { field: "angular.y", source: "disabled", pin: 32 },
-        { field: "angular.z", source: "disabled", pin: 33 }
+        { field: "linear.x", source: "lm35", pin: 34, activeLow: false },
+        { field: "linear.y", source: "touch", pin: 4, activeLow: false },
+        { field: "linear.z", source: "internal-temperature", pin: -1, activeLow: false },
+        { field: "angular.x", source: "hcsr04", pin: 5, echoPin: 17, activeLow: false },
+        { field: "angular.y", source: "disabled", pin: 32, activeLow: false },
+        { field: "angular.z", source: "disabled", pin: 33, activeLow: false }
       ]
     };
 
