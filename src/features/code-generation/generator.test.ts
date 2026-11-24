@@ -177,7 +177,7 @@ test("starter program includes a 1 Hz counter and Bool LED on GPIO2", () => {
 });
 
 
-import { createDevice, devices, entityCounts, type DeviceType } from "../program";
+import { createDevice, devices, entityCounts, createGroupEntity, defaultGroupChannels, type DeviceType, type GroupEntity } from "../program";
 import { pwmAssignments } from "./devices";
 test("all catalog profiles generate correct callbacks and handles",()=>{
   assert.equal(Object.keys(devices).length,27);
@@ -220,9 +220,9 @@ test("distinct PWM channels and separate servo timers",()=>{
  const {main}=generateFiles(p);assert.match(main,/ledcSetup\(0, 50, 16\)/);assert.match(main,/ledcSetup\(2, 1000, 8\)/);
  const loop=main.slice(main.indexOf("void loop()"));assert.ok(loop.indexOf("stop_device_2")<loop.indexOf("wifiConnected"));
 });
-test("middleware capacity: 10 publishers and 5 subscribers",()=>{
- const outputs=Array.from({length:6},(_,i)=>({...createDevice("ssd1306",`o${i}`),topic:`/o${i}`,address:0x3c}));
- assert.ok(validateProject({...defaultProject,entities:outputs}).some(e=>e.includes("5 subscribers")));
+test("middleware capacity: 10 publishers and 8 subscribers",()=>{
+ const outputs=Array.from({length:9},(_,i)=>({...createDevice("ssd1306",`o${i}`),topic:`/o${i}`,address:0x3c}));
+ assert.ok(validateProject({...defaultProject,entities:outputs}).some(e=>e.includes("8 subscribers")));
  assert.equal(entityCounts(defaultProject).timers,1);
 });
 
@@ -666,4 +666,283 @@ test("serializes and parses exported project JSON while stripping WiFi password"
   }
   assert.equal(parseProjectDraft("{invalid").ok, false);
   assert.equal(parseProjectDraft(JSON.stringify({ ...defaultProject, domain: 999 })).ok, false);
+});
+
+test("supports 1 to 4 servos with dynamic PWM channel reservations", () => {
+  const servo1 = { ...createDevice("servo", "s1"), topic: "/servo1", pins: { signal: 13 } };
+  const servo2 = { ...createDevice("servo", "s2"), topic: "/servo2", pins: { signal: 14 } };
+  const servo3 = { ...createDevice("servo", "s3"), topic: "/servo3", pins: { signal: 15 } };
+  const servo4 = { ...createDevice("servo", "s4"), topic: "/servo4", pins: { signal: 16 } };
+  const servo5 = { ...createDevice("servo", "s5"), topic: "/servo5", pins: { signal: 17 } };
+  const buzzer = { ...createDevice("passive-buzzer", "bz"), topic: "/buzzer", pins: { signal: 27 } };
+  const rgb = { ...createDevice("rgb-led", "rgb"), topic: "/rgb", pins: { r: 4, g: 5, b: 18 } };
+
+  // 1 servo configuration: reserves channels 0-1, buzzer at 2, RGB at 4-6
+  const p1 = { ...defaultProject, entities: [servo1, buzzer, rgb] };
+  assert.deepEqual(validateProject(p1), []);
+  assert.deepEqual(pwmAssignments(p1), [[0], [2], [4, 5, 6]]);
+
+  // 2 servos configuration: uses channels 0-1, buzzer at 2, RGB at 4-6
+  const p2 = { ...defaultProject, entities: [servo1, servo2, buzzer, rgb] };
+  assert.deepEqual(validateProject(p2), []);
+  assert.deepEqual(pwmAssignments(p2), [[0], [1], [2], [4, 5, 6]]);
+
+  // 3 servos configuration: uses 0, 1, 2; reserves pair 0-3; buzzer at 4; RGB at 6-8
+  const p3 = { ...defaultProject, entities: [servo1, servo2, servo3, buzzer, rgb] };
+  assert.deepEqual(validateProject(p3), []);
+  assert.deepEqual(pwmAssignments(p3), [[0], [1], [2], [4], [6, 7, 8]]);
+
+  // 4 servos + passive buzzer: uses channels 0, 1, 2, 3; buzzer at 4 (5 subscribers total)
+  const p4 = { ...defaultProject, entities: [servo1, servo2, servo3, servo4, buzzer] };
+  assert.deepEqual(validateProject(p4), []);
+  assert.deepEqual(pwmAssignments(p4), [[0], [1], [2], [3], [4]]);
+
+  // 4 servos + RGB LED: uses channels 0, 1, 2, 3; RGB at 4, 5, 6 (5 subscribers total)
+  const p4Rgb = { ...defaultProject, entities: [servo1, servo2, servo3, servo4, rgb] };
+  assert.deepEqual(validateProject(p4Rgb), []);
+  assert.deepEqual(pwmAssignments(p4Rgb), [[0], [1], [2], [3], [4, 5, 6]]);
+
+  // 5 servos configuration: exceeds maximum 4 servos limit
+  const p5 = { ...defaultProject, entities: [servo1, servo2, servo3, servo4, servo5] };
+  const p5Issues = validateProject(p5);
+  assert.ok(p5Issues.some(e => e.includes("PWM:") && e.includes("supports up to 4 servos")));
+
+  // 4 servos + 1 OLED = 5 subscribers (within the 8-subscriber base firmware limit)
+  const oled = { ...createDevice("ssd1306", "oled"), topic: "/oled" };
+  const p4Oled = { ...defaultProject, entities: [servo1, servo2, servo3, servo4, oled] };
+  assert.deepEqual(validateProject(p4Oled), []);
+
+  // 4 servos + 1 OLED + 1 extra subscriber = 6 subscribers (allowed with 8 subscribers limit)
+  const extraSub = { id: "extra_sub", kind: "subscriber" as const, topic: "/extra_sub", pin: 23, activeLow: false };
+  const p6Subs = { ...defaultProject, entities: [servo1, servo2, servo3, servo4, oled, extraSub] };
+  assert.deepEqual(validateProject(p6Subs), []);
+
+  // 9 subscribers exceeds the 8-subscriber limit
+  const subs9 = [servo1, servo2, servo3, servo4, oled,
+    { id: "sub1", kind: "subscriber" as const, topic: "/s1", pin: 23, activeLow: false },
+    { id: "sub2", kind: "subscriber" as const, topic: "/s2", pin: 22, activeLow: false },
+    { id: "sub3", kind: "subscriber" as const, topic: "/s3", pin: 21, activeLow: false },
+    { id: "sub4", kind: "subscriber" as const, topic: "/s4", pin: 19, activeLow: false }
+  ];
+  const p9Subs = { ...defaultProject, entities: subs9 };
+  const subIssues = validateProject(p9Subs);
+  assert.ok(subIssues.some(e => e.includes("8 subscribers")));
+});
+
+test("C++ runtime: 4 servos generate, compile and operate simultaneously", { skip: spawnSync("g++", ["--version"]).status !== 0 }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "microros-servos-"));
+  try {
+    copyFileSync("tests/firmware-stubs/Arduino.h", join(dir, "Arduino.h"));
+    for (const path of ["MicroROSHelper.h", "std_msgs/msg/int32.h"]) {
+      const file = join(dir, path);
+      mkdirSync(join(file, ".."), { recursive: true });
+      writeFileSync(file, "#pragma once\n");
+    }
+    const servo1 = { ...createDevice("servo", "s1"), topic: "/servo1", pins: { signal: 13 } };
+    const servo2 = { ...createDevice("servo", "s2"), topic: "/servo2", pins: { signal: 14 } };
+    const servo3 = { ...createDevice("servo", "s3"), topic: "/servo3", pins: { signal: 15 } };
+    const servo4 = { ...createDevice("servo", "s4"), topic: "/servo4", pins: { signal: 16 } };
+    const p = { ...defaultProject, entities: [servo1, servo2, servo3, servo4] };
+    const { main } = generateFiles(p);
+
+    assert.match(main, /ledcSetup\(0, 50, 16\)/);
+    assert.match(main, /ledcSetup\(1, 50, 16\)/);
+    assert.match(main, /ledcSetup\(2, 50, 16\)/);
+    assert.match(main, /ledcSetup\(3, 50, 16\)/);
+    assert.match(main, /ledcAttachPin\(servo1, 0\)/);
+    assert.match(main, /ledcAttachPin\(servo2, 1\)/);
+    assert.match(main, /ledcAttachPin\(servo3, 2\)/);
+    assert.match(main, /ledcAttachPin\(servo4, 3\)/);
+
+    const harness = `
+#include <cassert>
+#include <cmath>
+
+int main() {
+    setup();
+    // Default starting angle: 90 degrees -> 1450 us pulse
+    const uint32_t neutral = static_cast<uint32_t>(1450.0 * 65535.0 / 20000.0);
+    assert(test_pwm_duty[0] == neutral);
+    assert(test_pwm_duty[1] == neutral);
+    assert(test_pwm_duty[2] == neutral);
+    assert(test_pwm_duty[3] == neutral);
+
+    // Simultaneous independent angle commands
+    std_msgs__msg__Int32 msg0{0};    // 0 deg -> 500 us
+    std_msgs__msg__Int32 msg1{45};   // 45 deg -> 975 us
+    std_msgs__msg__Int32 msg2{90};   // 90 deg -> 1450 us
+    std_msgs__msg__Int32 msg3{180};  // 180 deg -> 2400 us
+
+    subscription_callback_0(&msg0);
+    subscription_callback_1(&msg1);
+    subscription_callback_2(&msg2);
+    subscription_callback_3(&msg3);
+
+    const uint32_t duty0 = static_cast<uint32_t>(500.0 * 65535.0 / 20000.0);
+    const uint32_t duty1 = static_cast<uint32_t>((500.0 + 45.0 * (1900.0 / 180.0)) * 65535.0 / 20000.0);
+    const uint32_t duty2 = static_cast<uint32_t>(1450.0 * 65535.0 / 20000.0);
+    const uint32_t duty3 = static_cast<uint32_t>(2400.0 * 65535.0 / 20000.0);
+
+    assert(test_pwm_duty[0] == duty0);
+    assert(test_pwm_duty[1] == duty1);
+    assert(test_pwm_duty[2] == duty2);
+    assert(test_pwm_duty[3] == duty3);
+
+    // Test clamping limits (-15 clamped to 0, 250 clamped to 180)
+    std_msgs__msg__Int32 clamped_low{-15};
+    std_msgs__msg__Int32 clamped_high{250};
+    subscription_callback_0(&clamped_low);
+    subscription_callback_3(&clamped_high);
+    assert(test_pwm_duty[0] == duty0);
+    assert(test_pwm_duty[3] == duty3);
+
+    // Channels 1 and 2 remain unaffected by updates on 0 and 3
+    assert(test_pwm_duty[1] == duty1);
+    assert(test_pwm_duty[2] == duty2);
+
+    return 0;
+}
+`;
+    writeFileSync(join(dir, "main.cpp"), main + harness);
+    const binary = join(dir, "servos_simultaneous");
+    const compiled = spawnSync("g++", ["-std=c++17", "-DTEST_CAPTURE_LOGS", "-DMICRO_ROS_TRANSPORT_ARDUINO_WIFI", "-I", dir, join(dir, "main.cpp"), "-o", binary], { encoding: "utf8" });
+    assert.equal(compiled.status, 0, compiled.stderr);
+    const result = spawnSync(binary, [], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("multichannel actuator group: validation, channels allocation and handle count", () => {
+  const groupTwist = createGroupEntity("g1", "Twist", "/arm_cmd", [13, 14, 15, 16, 17, 18]);
+  assert.equal(groupTwist.channels.length, 6);
+  assert.equal(entityCounts({ ...defaultProject, entities: [groupTwist] }).subscribers, 1);
+
+  // Group with 2 servos (linear.x, linear.y), 1 PWM (linear.z), 1 digital (angular.x)
+  const configuredGroup: GroupEntity = {
+    ...groupTwist,
+    channels: [
+      { field: "linear.x", target: "servo", pin: 13, activeLow: false },
+      { field: "linear.y", target: "servo", pin: 14, activeLow: false },
+      { field: "linear.z", target: "pwm", pin: 4, activeLow: false },
+      { field: "angular.x", target: "digital", pin: 2, activeLow: false },
+      { field: "angular.y", target: "disabled", pin: 17, activeLow: false },
+      { field: "angular.z", target: "disabled", pin: 18, activeLow: false },
+    ]
+  };
+
+  const buzzer = { ...createDevice("passive-buzzer", "bz"), topic: "/buzzer", pins: { signal: 27 } };
+  const p = { ...defaultProject, entities: [configuredGroup, buzzer] };
+  assert.deepEqual(validateProject(p), []);
+
+  // Servos take channels 0 and 1; buzzer takes channel 2 (reserving pair 2-3); PWM starts at channel 4
+  const assignments = pwmAssignments(p);
+  assert.deepEqual(assignments, [[0, 1, 4], [2]]);
+
+  // Pin conflict detection in group channels
+  const conflictingGroup: GroupEntity = {
+    ...configuredGroup,
+    channels: [
+      { ...configuredGroup.channels[0], pin: 13 },
+      { ...configuredGroup.channels[1], pin: 13 }, // Pin 13 used twice!
+      ...configuredGroup.channels.slice(2)
+    ]
+  };
+  const issues = validateProject({ ...defaultProject, entities: [conflictingGroup] });
+  assert.ok(issues.some(e => e.includes("GPIO 13 conflict")));
+});
+
+test("C++ runtime: multichannel actuator group (Twist) controls servos, PWM and digital simultaneously", { skip: spawnSync("g++", ["--version"]).status !== 0 }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "microros-group-"));
+  try {
+    copyFileSync("tests/firmware-stubs/Arduino.h", join(dir, "Arduino.h"));
+    for (const path of ["MicroROSHelper.h", "geometry_msgs/msg/twist.h"]) {
+      const file = join(dir, path);
+      mkdirSync(join(file, ".."), { recursive: true });
+      writeFileSync(file, "#pragma once\n");
+    }
+
+    const group: GroupEntity = {
+      id: "group1",
+      kind: "group",
+      topic: "/arm_cmd",
+      message: "Twist",
+      channels: [
+        { field: "linear.x", target: "servo", pin: 13, activeLow: false },
+        { field: "linear.y", target: "servo", pin: 14, activeLow: false },
+        { field: "linear.z", target: "pwm", pin: 4, activeLow: false },
+        { field: "angular.x", target: "digital", pin: 2, activeLow: false },
+        { field: "angular.y", target: "disabled", pin: 17, activeLow: false },
+        { field: "angular.z", target: "disabled", pin: 18, activeLow: false },
+      ]
+    };
+
+    const p = { ...defaultProject, entities: [group] };
+    const { main } = generateFiles(p);
+
+    assert.match(main, /#include <geometry_msgs\/msg\/twist.h>/);
+    assert.match(main, /geometry_msgs__msg__Twist msg_0;/);
+    assert.match(main, /const uint8_t group1_LINEAR_X = 13;/);
+    assert.match(main, /const uint8_t group1_LINEAR_Y = 14;/);
+    assert.match(main, /const uint8_t group1_LINEAR_Z = 4;/);
+    assert.match(main, /const uint8_t group1_ANGULAR_X = 2;/);
+    assert.match(main, /ledcSetup\(0, 50, 16\)/);
+    assert.match(main, /ledcSetup\(1, 50, 16\)/);
+    assert.match(main, /ledcSetup\(2, 1000, 8\)/);
+    assert.match(main, /pinMode\(group1_ANGULAR_X, OUTPUT\)/);
+    assert.match(main, /createSubscription\(sub_0, ROSIDL_GET_MSG_TYPE_SUPPORT\(geometry_msgs, msg, Twist\), "\/arm_cmd"/);
+
+    const harness = `
+#include <cassert>
+#include <cmath>
+
+int main() {
+    setup();
+    // Default neutral pulse written in setup() for servos
+    const uint32_t neutral = static_cast<uint32_t>(1450.0 * 65535.0 / 20000.0);
+    assert(test_pwm_duty[0] == neutral);
+    assert(test_pwm_duty[1] == neutral);
+    assert(test_pwm_duty[2] == 0); // PWM starts at 0
+    assert(test_gpio_state[2] == 0); // Digital starts at 0
+
+    // Send multi-actuator command via single Twist message
+    geometry_msgs__msg__Twist cmd;
+    cmd.linear.x = 90.0;   // Servo 1: 90 deg -> 1450 us
+    cmd.linear.y = 180.0;  // Servo 2: 180 deg -> 2400 us
+    cmd.linear.z = 200.0;  // PWM: 200 duty
+    cmd.angular.x = 1.0;   // Digital: HIGH
+
+    subscription_callback_0(&cmd);
+
+    const uint32_t duty_servo1 = static_cast<uint32_t>(1450.0 * 65535.0 / 20000.0);
+    const uint32_t duty_servo2 = static_cast<uint32_t>(2400.0 * 65535.0 / 20000.0);
+
+    assert(test_pwm_duty[0] == duty_servo1);
+    assert(test_pwm_duty[1] == duty_servo2);
+    assert(test_pwm_duty[2] == 200);
+    assert(test_gpio_state[2] == 1);
+
+    // Turn off digital output and change servo 1 to 0 deg
+    cmd.linear.x = 0.0;
+    cmd.angular.x = 0.0;
+    subscription_callback_0(&cmd);
+
+    const uint32_t duty_servo1_min = static_cast<uint32_t>(500.0 * 65535.0 / 20000.0);
+    assert(test_pwm_duty[0] == duty_servo1_min);
+    assert(test_pwm_duty[1] == duty_servo2); // Servo 2 untouched
+    assert(test_gpio_state[2] == 0);         // Digital switched off
+
+    return 0;
+}
+`;
+    writeFileSync(join(dir, "main.cpp"), main + harness);
+    const binary = join(dir, "group_actuators");
+    const compiled = spawnSync("g++", ["-std=c++17", "-DTEST_CAPTURE_LOGS", "-DMICRO_ROS_TRANSPORT_ARDUINO_WIFI", "-I", dir, join(dir, "main.cpp"), "-o", binary], { encoding: "utf8" });
+    assert.equal(compiled.status, 0, compiled.stderr);
+    const result = spawnSync(binary, [], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

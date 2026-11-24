@@ -15,6 +15,7 @@ const devicePrefixes = {
 
 function pinPrefix(entity: Entity) {
   if (entity.kind === "subscriber") return "led";
+  if (entity.kind === "group") return "group";
   if (entity.kind === "device") return devicePrefixes[entity.device];
   if (entity.kind === "robot") return {
     "imu-yaw": "sensor_bno055", "tof-triple": "sensor_tof_group",
@@ -34,6 +35,6 @@ export function pinName(entity: Entity, instance: number, role: string) {
   const name = `${prefix}${/\d$/.test(prefix) ? "_" : ""}${instance}`;
   const signal = ({ signal: "", pin: "PWM", button: "SW", trigger: "TRIG", standby: "STBY",
     leftA: "LEFT_A", leftB: "LEFT_B", rightA: "RIGHT_A", rightB: "RIGHT_B"
-  } as Record<string, string>)[role] ?? role.toUpperCase();
+  } as Record<string, string>)[role] ?? role.replace(/\./g, "_").toUpperCase();
   return signal ? `${name}_${signal}` : name;
 }

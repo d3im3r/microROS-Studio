@@ -26,13 +26,48 @@ const subscriber = z.object({
   pin: z.number().int().min(0).max(48),
   activeLow: z.boolean()
 });
+export const groupChannelSchema = z.object({
+  field: z.string(),
+  target: z.enum(["servo", "pwm", "digital", "disabled"]),
+  pin: z.number().int().min(0).max(48),
+  activeLow: z.boolean().default(false)
+});
+export const groupSchema = z.object({
+  id: z.string().min(1),
+  kind: z.literal("group"),
+  topic,
+  message: z.enum(["Twist", "Vector3"]),
+  channels: z.array(groupChannelSchema)
+});
+export type GroupChannel = z.infer<typeof groupChannelSchema>;
+export type GroupEntity = z.infer<typeof groupSchema>;
+export function defaultGroupChannels(message: "Twist" | "Vector3", outputPinsList: number[] = [13, 14, 15, 16, 17, 18]): GroupChannel[] {
+  const fields = message === "Twist"
+    ? ["linear.x", "linear.y", "linear.z", "angular.x", "angular.y", "angular.z"]
+    : ["x", "y", "z"];
+  return fields.map((field, idx) => ({
+    field,
+    target: (idx < (message === "Twist" ? 4 : 3) ? "servo" : "disabled") as "servo" | "disabled",
+    pin: outputPinsList[idx % outputPinsList.length] ?? 13,
+    activeLow: false
+  }));
+}
+export function createGroupEntity(id: string, message: "Twist" | "Vector3" = "Twist", topic = "/actuators_cmd", outputPinsList?: number[]): GroupEntity {
+  return {
+    id,
+    kind: "group",
+    topic,
+    message,
+    channels: defaultGroupChannels(message, outputPinsList)
+  };
+}
 export const projectSchema = z.object({
   version: z.literal(1), name: z.string().min(1).max(80), nodeName: identifier.refine(value=>value.endsWith("_node"), "The node name must end with _node."),
   board: boardSchema, domain: z.number().int().min(0).max(232),
   transport: z.enum(["wifi", "serial"]), ssid: z.string().max(32), password: z.string().max(63),
   agentIp: z.string(), port: z.number().int().min(8888,"The Agent port is fixed at 8888.").max(8888,"The Agent port is fixed at 8888."),
   i2c: z.object({ sda: z.number().int(), scl: z.number().int() }).optional(),
-  entities: z.array(z.union([publisher, subscriber, robotSchema, deviceSchema])).max(12)
+  entities: z.array(z.union([publisher, subscriber, robotSchema, deviceSchema, groupSchema])).max(16)
 }).superRefine((p, ctx) => {
   if (p.transport === "wifi") {
     if (!p.ssid.trim()) ctx.addIssue({ code: "custom", path: ["ssid"], message: "Enter the WiFi network name." });
@@ -62,6 +97,13 @@ export const projectSchema = z.object({
     if (e.kind === "subscriber") subs++;
     if (e.kind === "robot") { if (robotDefinitions[e.behavior].direction === "publisher") pubs++; else subs++; if (e.behavior === "differential") pubs++; if(e.behavior === "motor-pwm")generalPwm++; }
     if (e.kind === "device") { if (devices[e.device].direction === "publisher") pubs++; else subs++; if(e.device === "servo")servos++;else generalPwm+=pwmCount(e); }
+    if (e.kind === "group") {
+      subs++;
+      for (const ch of e.channels) {
+        if (ch.target === "servo") servos++;
+        else if (ch.target === "pwm") generalPwm++;
+      }
+    }
     const assigned = e.kind === "device" ? ((devices[e.device] as DeviceDefinition).addresses ? [e.address!] : []) : e.kind === "robot" ? (e.behavior === "imu-yaw" ? [0x28] : e.behavior === "tof-triple" ? [0x30,0x31,0x32] : []) : [];
     for(const addr of assigned){
       if(addresses.has(addr))ctx.addIssue({code:"custom",message:`I2C: address 0x${addr.toString(16)} duplicated.`});
@@ -69,8 +111,9 @@ export const projectSchema = z.object({
       if((hasVl||hasLegacyTof)&&addr===0x29&&!(e.kind === "device"&&e.device === "vl53l0x"))ctx.addIssue({code:"custom",message:"I2C: keep 0x29 free while initializing VL53L0X sensors. Change the other device address."});
     }
   });
-  if(pubs>10||subs>5)ctx.addIssue({code:"custom",message:"The base firmware supports up to 10 publishers and 5 subscribers."});
-  if(servos>2||generalPwm>board.pwmChannels-2)ctx.addIssue({code:"custom",message:`PWM: ${board.title} supports 2 servos and ${board.pwmChannels-2} additional channels in this profile (separate 50 Hz and 1 kHz timers).${p.entities.some(e=>e.kind==="device"&&e.device==="passive-buzzer")?" Each passive buzzer reserves 2 channels for an independent tone timer.":""}`});
+  if(pubs>10||subs>8)ctx.addIssue({code:"custom",message:"The base firmware supports up to 10 publishers and 8 subscribers."});
+  const servoReservation = Math.max(2, Math.ceil(servos / 2) * 2);
+  if(servos>4||generalPwm>board.pwmChannels-servoReservation)ctx.addIssue({code:"custom",message:`PWM: ${board.title} supports up to 4 servos and ${board.pwmChannels-servoReservation} additional channels in this profile (separate 50 Hz and 1 kHz timers).${p.entities.some(e=>e.kind==="device"&&e.device==="passive-buzzer")?" Each passive buzzer reserves 2 channels for an independent tone timer.":""}`});
   if (p.transport === "serial" || board.family !== "esp32") { pins.add(board.uart.tx); pins.add(board.uart.rx); pinOwners.set(board.uart.tx, "Serial TX"); pinOwners.set(board.uart.rx, "Serial RX"); }
   p.entities.forEach((e, i) => {
     const entityTopics = [e.topic, ...(e.kind === "robot" && e.behavior === "differential" ? [e.outputTopic] : [])];
@@ -80,10 +123,14 @@ export const projectSchema = z.object({
     }
     if (ids.has(e.id)) ctx.addIssue({ code: "custom", message: "Some entities have duplicate IDs." });
     ids.add(e.id);
-    const title = e.kind === "device" ? devices[e.device].title : e.kind === "robot" ? robotDefinitions[e.behavior].title : e.kind === "subscriber" ? "LED / digital output" : "Publisher";
+    const title = e.kind === "device" ? devices[e.device].title : e.kind === "robot" ? robotDefinitions[e.behavior].title : e.kind === "group" ? "Actuator group" : e.kind === "subscriber" ? "LED / digital output" : "Publisher";
     const owner = `${title} (${e.topic})`;
     if(e.kind==="device"&&e.device==="touch"&&!boardPins(p.board,"touch").length)ctx.addIssue({code:"custom",path:["entities",i],message:`Touch unavailable on ${board.title}.`});
-    const used = e.kind === "device" ? devices[e.device].pins.filter(role=>!(role.optional&&e.pins[role.key]===-1)).map(role=>({pin:e.pins[role.key],label:role.label})) : (e.kind === "subscriber" ? [e.pin] : e.kind === "robot" ? robotPins(e) : []).map((pin,index)=>({pin,label:`pin ${index+1}`}));
+    const used = e.kind === "device"
+      ? devices[e.device].pins.filter(role=>!(role.optional&&e.pins[role.key]===-1)).map(role=>({pin:e.pins[role.key],label:role.label}))
+      : e.kind === "group"
+      ? e.channels.filter(ch => ch.target !== "disabled").map(ch => ({ pin: ch.pin, label: `${ch.field} (${ch.target})` }))
+      : (e.kind === "subscriber" ? [e.pin] : e.kind === "robot" ? robotPins(e) : []).map((pin,index)=>({pin,label:`pin ${index+1}`}));
     for (const {pin,label} of used) {
       const current = `${owner} · ${label}`;
       const mode = e.kind === "device" ? devices[e.device].pins.find(role=>role.label===label)!.mode : e.kind === "robot" && e.behavior === "wheel-encoders" ? "input" : "output";
@@ -156,6 +203,8 @@ export function validateEntityIssues(project: Project): Record<string, string[]>
     }
     const usedPins = e.kind === "device"
       ? devices[e.device].pins.filter(role => !(role.optional && e.pins[role.key] === -1)).map(role => e.pins[role.key])
+      : e.kind === "group"
+      ? e.channels.filter(ch => ch.target !== "disabled").map(ch => ch.pin)
       : e.kind === "subscriber" ? [e.pin] : e.kind === "robot" ? robotPins(e) : [];
     for (const pin of usedPins) {
       if (pinOwners.has(pin)) {
@@ -168,9 +217,9 @@ export function validateEntityIssues(project: Project): Record<string, string[]>
 }
 export function handles(project: Project) { return project.entities.length; }
 
-export function entityDirection(e: Entity): "publisher" | "subscriber" { return e.kind === "device" ? devices[e.device].direction : e.kind === "robot" ? robotDefinitions[e.behavior].direction : e.kind; }
-export function entityMessage(e: Entity): string { return e.kind === "device" ? devices[e.device].message : e.kind === "robot" ? robotDefinitions[e.behavior].message : e.kind === "publisher" ? e.message : "Bool"; }
-export function entityTitle(e: Entity): string { return e.kind === "device" ? devices[e.device].title : e.kind === "robot" ? robotDefinitions[e.behavior].title : e.kind === "subscriber" ? "LED / digital output" : e.behavior === "counter" ? "Counter" : "Periodic publication"; }
+export function entityDirection(e: Entity): "publisher" | "subscriber" { return e.kind === "device" ? devices[e.device].direction : e.kind === "robot" ? robotDefinitions[e.behavior].direction : e.kind === "group" ? "subscriber" : e.kind; }
+export function entityMessage(e: Entity): string { return e.kind === "device" ? devices[e.device].message : e.kind === "robot" ? robotDefinitions[e.behavior].message : e.kind === "group" ? e.message : e.kind === "publisher" ? e.message : "Bool"; }
+export function entityTitle(e: Entity): string { return e.kind === "device" ? devices[e.device].title : e.kind === "robot" ? robotDefinitions[e.behavior].title : e.kind === "group" ? "Actuator group" : e.kind === "subscriber" ? "LED / digital output" : e.behavior === "counter" ? "Counter" : "Periodic publication"; }
 export function entityCounts(p: Project) { return { publishers: p.entities.filter(e => entityDirection(e) === "publisher").length + p.entities.filter(e=>e.kind === "robot"&&e.behavior === "differential").length, subscribers: p.entities.filter(e => entityDirection(e) === "subscriber").length, timers: p.entities.filter(e=>entityDirection(e) === "publisher").length }; }
 
 export function suggestNodeName(value:string){const name=value.trim().replace(/[^a-zA-Z0-9_]/g,"_");const safe=/^[a-zA-Z_]/.test(name)?name:`node_${name}`;return safe.endsWith("_node")?safe:`${safe}_node`;}

@@ -20,11 +20,11 @@ export function allocateDevice(type:DeviceType,p:Project,id:string):DeviceEntity
 export function DeviceChoices({direction,project,add,select}:{direction:"publisher"|"subscriber";project:Project;add:(type:DeviceType)=>void;select:(id:string)=>void}){
   const { translate } = useLanguage();
  const group=project.entities.filter(e=>entityDirection(e)===direction);
- const limit=direction==="publisher"?10:5;
+ const limit=direction==="publisher"?10:8;
  const counts=entityCounts(project);const count=direction==="publisher"?counts.publishers:counts.subscribers;
  return <div className="space-y-4"><p className="text-xs leading-relaxed text-muted-foreground">{translate(direction==="publisher"?"Choose an input to add a default profile. Adjust its pins and topic in Properties.":"Choose an output to prepare its message and callback. Adjust its pins in Properties.")}</p>
   {group.length>0&&<div className="space-y-2">{group.map(e=><button key={e.id} className="flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-muted p-2 text-left text-xs" onClick={()=>select(e.id)}><span><strong>{translate(entityTitle(e))}</strong><span className="mono mt-1 block text-muted-foreground">{translate(e.topic)}</span></span><Settings2 size={14}/></button>)}</div>}
-  <div className="grid gap-2">{(Object.entries(devices) as [DeviceType,DeviceDefinition][]).filter(([,d])=>d.direction===direction).map(([type,d])=><Button key={type} variant="outline" size="sm" title={translate(deviceUnavailableReason(type,project.board)||d.description)} disabled={count>=limit||project.entities.length>=12||!!deviceUnavailableReason(type,project.board)} onClick={()=>add(type)} className="h-auto min-h-9 justify-start whitespace-normal py-2 text-left"><Plus/><span>{translate(d.title)}</span></Button>)}</div>
+  <div className="grid gap-2">{(Object.entries(devices) as [DeviceType,DeviceDefinition][]).filter(([,d])=>d.direction===direction).map(([type,d])=><Button key={type} variant="outline" size="sm" title={translate(deviceUnavailableReason(type,project.board)||d.description)} disabled={count>=limit||project.entities.length>=16||!!deviceUnavailableReason(type,project.board)} onClick={()=>add(type)} className="h-auto min-h-9 justify-start whitespace-normal py-2 text-left"><Plus/><span>{translate(d.title)}</span></Button>)}</div>
  </div>;
 }
 export function DeviceProperties({entity:e,update,board="denky32"}:{entity:DeviceEntity;update:(e:DeviceEntity)=>void;board?:Project["board"]}){

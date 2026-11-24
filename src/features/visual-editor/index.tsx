@@ -3,11 +3,125 @@ import { useLanguage } from "../language";
 
 import { useEffect, useRef, useState } from "react";
 import { Background, Panel, PanOnScrollMode, Handle, Position, ReactFlow, applyNodeChanges, type Node, type NodeProps, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
-import { Radio, Timer, Cpu, Lightbulb, TriangleAlert, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus } from "lucide-react";
+import { Radio, Timer, Cpu, Lightbulb, TriangleAlert, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus, Layers } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { useTheme } from "../theme";
-import { entityDirection, entityMessage, entityTitle, devices, validateEntityIssues } from "../program";
+import { entityDirection, entityMessage, entityTitle, devices, validateEntityIssues, defaultGroupChannels, boardProfile, type GroupEntity, type GroupChannel, type Entity } from "../program";
 import type { Project } from "../program";
+
+function GroupNode({ data, selected }: NodeProps) {
+  const { translate } = useLanguage();
+  const entity = data.entity as GroupEntity;
+  const project = data.project as Project;
+  const onUpdate = data.onUpdate as ((entity: GroupEntity) => void) | undefined;
+  const profile = boardProfile(project.board);
+  const hasError = Boolean(data.hasError);
+  const errorText = data.errorText ? String(data.errorText) : "";
+  const color = hasError ? "var(--destructive)" : selected ? "var(--primary)" : "var(--border)";
+
+  function changeMsg(msg: "Twist" | "Vector3") {
+    if (!onUpdate || msg === entity.message) return;
+    onUpdate({
+      ...entity,
+      message: msg,
+      channels: defaultGroupChannels(msg, profile.output)
+    });
+  }
+
+  function changeChannelTarget(idx: number, target: GroupChannel["target"]) {
+    if (!onUpdate) return;
+    const next = [...entity.channels];
+    next[idx] = { ...next[idx], target };
+    onUpdate({ ...entity, channels: next });
+  }
+
+  function changeChannelPin(idx: number, pin: number) {
+    if (!onUpdate) return;
+    const next = [...entity.channels];
+    next[idx] = { ...next[idx], pin };
+    onUpdate({ ...entity, channels: next });
+  }
+
+  return (
+    <div
+      data-conflict={hasError ? "true" : undefined}
+      title={hasError ? translate(errorText) : undefined}
+      style={{ borderColor: color, width: 330 }}
+      className="rounded-xl border-2 bg-card/95 shadow-xl backdrop-blur-sm"
+    >
+      <Handle type="target" position={Position.Left} />
+      <div className="flex items-center justify-between border-b border-border bg-muted/40 px-3.5 py-2">
+        <div className="flex items-center gap-2">
+          <Layers size={15} className="text-secondary dark:text-primary" />
+          <span className="text-[10px] font-bold tracking-wider text-secondary dark:text-primary">
+            {translate("ACTUATOR GROUP")}
+          </span>
+          {hasError && <TriangleAlert size={13} className="text-destructive shrink-0" />}
+        </div>
+        <select
+          className="nodrag nopan rounded border border-border bg-background px-2 py-0.5 font-mono text-[10px] text-foreground"
+          value={entity.message}
+          onChange={e => changeMsg(e.target.value as "Twist" | "Vector3")}
+        >
+          <option value="Twist">geometry_msgs / Twist</option>
+          <option value="Vector3">geometry_msgs / Vector3</option>
+        </select>
+      </div>
+
+      <div className="border-b border-border px-3.5 py-1.5 flex items-center justify-between text-[10px]">
+        <span className="font-mono font-medium text-foreground truncate max-w-[170px]" title={entity.topic}>
+          {entity.topic}
+        </span>
+        <span className="text-muted-foreground">
+          {entity.channels.filter(c => c.target !== "disabled").length} {translate("active")}
+        </span>
+      </div>
+
+      <div className="p-2 space-y-1.5 max-h-[220px] overflow-y-auto">
+        {entity.channels.map((ch, idx) => (
+          <div
+            key={ch.field}
+            className={`flex items-center justify-between gap-1.5 rounded-md border p-1 text-[11px] ${
+              ch.target === "disabled"
+                ? "border-dashed border-border/50 bg-muted/20 opacity-50"
+                : "border-border bg-background shadow-xs"
+            }`}
+          >
+            <span className="font-mono text-[10px] font-medium text-foreground min-w-[55px] truncate" title={ch.field}>
+              {ch.field}
+            </span>
+            <select
+              className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 text-[10px] text-foreground"
+              value={ch.target}
+              onChange={e => changeChannelTarget(idx, e.target.value as GroupChannel["target"])}
+            >
+              <option value="servo">{translate("Servo (50 Hz)")}</option>
+              <option value="pwm">{translate("PWM (1 kHz)")}</option>
+              <option value="digital">{translate("Digital")}</option>
+              <option value="disabled">{translate("Disabled")}</option>
+            </select>
+            {ch.target !== "disabled" ? (
+              <select
+                className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 font-mono text-[10px] text-foreground"
+                value={ch.pin}
+                onChange={e => changeChannelPin(idx, Number(e.target.value))}
+              >
+                {profile.output.map(pin => (
+                  <option key={pin} value={pin}>
+                    GPIO {pin}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-[10px] text-muted-foreground italic px-1.5">—</span>
+            )}
+          </div>
+        ))}
+      </div>
+      <Handle type="source" position={Position.Right} />
+    </div>
+  );
+}
 
 function ProgramNode({ data, selected }: NodeProps) {
   const { translate } = useLanguage();
@@ -23,11 +137,11 @@ function ProgramNode({ data, selected }: NodeProps) {
     {kind !== "gpio" && kind !== "publisher" && kind !== "node" && <Handle type="source" position={Position.Right} />}
   </div>;
 }
-export function VisualEditor({ project, selected, onSelect }: { project: Project; selected: string | null; onSelect: (id: string | null) => void }) {
+export function VisualEditor({ project, selected, onSelect, onUpdate }: { project: Project; selected: string | null; onSelect: (id: string | null) => void; onUpdate?: (entity: Entity) => void }) {
   const { translate } = useLanguage();
   const { theme } = useTheme();
   // Keep the registry stable across renders and development Fast Refresh.
-  const [nodeTypes] = useState(() => ({ program: ProgramNode }));
+  const [nodeTypes] = useState(() => ({ program: ProgramNode, group: GroupNode }));
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   useEffect(() => {
@@ -126,20 +240,53 @@ export function VisualEditor({ project, selected, onSelect }: { project: Project
   useEffect(() => {
     const next: Node[] = [];
     const entityIssues = validateEntityIssues(project);
-    project.entities.forEach((entity, index) => {
-      const y = index * 165 + 45;
+    let currentY = 45;
+    project.entities.forEach((entity) => {
+      const y = currentY;
+      currentY += entity.kind === "group" ? 280 : 165;
       const pub = entityDirection(entity) === "publisher";
       const issues = entityIssues[entity.id] ?? [];
       const hasError = issues.length > 0;
       const errorText = issues.join(" · ");
-      next.push({ id: entity.id, type: "program", position: { x: pub ? 380 : 55, y }, selected: entity.id === selected,
-        data: { kind: pub ? "publisher" : "subscriber", label: pub ? "PUBLISHER" : "SUBSCRIBER", title: entity.topic, detail: `${["Vector3", "Twist"].includes(entityMessage(entity)) ? "geometry_msgs" : "std_msgs"} / ${entityMessage(entity)}`, hasError, errorText } });
-      next.push({ id: `${entity.id}:behavior`, type: "program", position: { x: pub ? 55 : 380, y },
-        data: { ...(entity.kind === "device" ? { kind: pub ? "timer" : "gpio", label: pub ? "INPUT + TIMER" : "OUTPUT", title: entityTitle(entity), detail: entity.address !== undefined ? `I2C 0x${entity.address.toString(16).toUpperCase()}` : devices[entity.device].pins.map(role=>`${role.label}: ${entity.pins[role.key]===-1?"Not connected":entity.pins[role.key]}`).join(" · ") } : entity.kind === "robot" ? {kind:pub?"timer":"gpio",label:"BEHAVIOR",title:entityTitle(entity),detail:entity.behavior === "differential"?`→ ${entity.outputTopic}`:pub?`${entity.period} ms`:`Watchdog ${entity.timeout} ms`} : entity.kind === "publisher" ? {kind:"timer",label:"TIMER + BEHAVIOR",title:`${entity.period} ms`,detail:entity.behavior === "counter"?"Counter · 1, 2, 3…":"Publish message"} : {kind:"gpio",label:"DIGITAL OUTPUT",title:`GPIO ${entity.pin}`,detail:"true: on · false: off"}), hasError, errorText } });
+
+      if (entity.kind === "group") {
+        next.push({
+          id: entity.id,
+          type: "program",
+          position: { x: 55, y },
+          selected: entity.id === selected,
+          data: {
+            kind: "subscriber",
+            label: "SUBSCRIBER",
+            title: entity.topic,
+            detail: `geometry_msgs / ${entity.message}`,
+            hasError,
+            errorText
+          }
+        });
+        next.push({
+          id: `${entity.id}:behavior`,
+          type: "group",
+          position: { x: 350, y },
+          selected: entity.id === selected,
+          data: {
+            entity,
+            project,
+            onUpdate,
+            hasError,
+            errorText
+          }
+        });
+      } else {
+        next.push({ id: entity.id, type: "program", position: { x: pub ? 380 : 55, y }, selected: entity.id === selected,
+          data: { kind: pub ? "publisher" : "subscriber", label: pub ? "PUBLISHER" : "SUBSCRIBER", title: entity.topic, detail: `${["Vector3", "Twist"].includes(entityMessage(entity)) ? "geometry_msgs" : "std_msgs"} / ${entityMessage(entity)}`, hasError, errorText } });
+        next.push({ id: `${entity.id}:behavior`, type: "program", position: { x: pub ? 55 : 380, y },
+          data: { ...(entity.kind === "device" ? { kind: pub ? "timer" : "gpio", label: pub ? "INPUT + TIMER" : "OUTPUT", title: entityTitle(entity), detail: entity.address !== undefined ? `I2C 0x${entity.address.toString(16).toUpperCase()}` : devices[entity.device].pins.map(role=>`${role.label}: ${entity.pins[role.key]===-1?"Not connected":entity.pins[role.key]}`).join(" · ") } : entity.kind === "robot" ? {kind:pub?"timer":"gpio",label:"BEHAVIOR",title:entityTitle(entity),detail:entity.behavior === "differential"?`→ ${entity.outputTopic}`:pub?`${entity.period} ms`:`Watchdog ${entity.timeout} ms`} : entity.kind === "publisher" ? {kind:"timer",label:"TIMER + BEHAVIOR",title:`${entity.period} ms`,detail:entity.behavior === "counter"?"Counter · 1, 2, 3…":"Publish message"} : {kind:"gpio",label:"DIGITAL OUTPUT",title:`GPIO ${entity.pin}`,detail:"true: on · false: off"}), hasError, errorText } });
+      }
     });
     if (!next.length) next.push({ id: "empty", type: "program", position: { x: 210, y: 140 }, data: { kind: "node", label: "ROS 2 NODE", title: project.nodeName, detail: "Add an entity to get started" } });
     setNodes(previous => next.map(n => ({ ...n, position: previous.find(p => p.id === n.id)?.position ?? n.position })));
-  }, [project, selected]);
+  }, [project, selected, onUpdate]);
   const entityIssues = validateEntityIssues(project);
   const edges = project.entities.map(e => ({ id: `edge-${e.id}`, source: (entityDirection(e) === "publisher") ? `${e.id}:behavior` : e.id, target: (entityDirection(e) === "publisher") ? e.id : `${e.id}:behavior`, animated: true, style: { stroke: entityIssues[e.id]?.length ? "var(--destructive)" : (entityDirection(e) === "publisher") ? "var(--ring)" : "var(--diagram-output-accent, var(--secondary))" } }));
   function change(changes: NodeChange[]) { setNodes(n => applyNodeChanges(changes, n)); }

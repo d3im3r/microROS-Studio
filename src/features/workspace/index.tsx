@@ -15,6 +15,7 @@ import {
   Cpu,
   FileJson,
   GitBranch,
+  Layers,
   Layers3,
   Plus,
   Settings2,
@@ -27,7 +28,7 @@ import { LanguageToggle } from "../language";
 import { ThemeToggle, ThemeSelector } from "../theme";
 import { Button } from "@/shared/ui/button";
 import { useProject } from "../project";
-import { defaultProject, handles, validateProject, type Entity, type Project } from "../program";
+import { defaultProject, handles, validateProject, createGroupEntity, type Entity, type Project } from "../program";
 import { BoardHelp } from "../board-help";
 import { ProjectWizard } from "../project-wizard";
 import { allocateDevice } from "../device-catalog";
@@ -83,7 +84,7 @@ function StudioWorkspace({ user, signOutUser }: { user: AuthUser; signOutUser: (
   }
 
   function add(kind: "publisher" | "subscriber") {
-    if (p.entities.length >= 12) return;
+    if (p.entities.length >= 16) return;
     const id = crypto.randomUUID();
     const profile = boardProfile(p.board);
     const bus = p.i2c ?? profile.i2c;
@@ -116,6 +117,21 @@ function StudioWorkspace({ user, signOutUser }: { user: AuthUser; signOutUser: (
     const next = allocateDevice(type, p, crypto.randomUUID());
     update({ entities: [...p.entities, next] });
     setSelected(next.id);
+  }
+
+  function addGroup() {
+    if (p.entities.length >= 16 || subs >= 8) return;
+    const id = crypto.randomUUID();
+    const profile = boardProfile(p.board);
+    let suffix = 1;
+    const base = "/actuators_cmd";
+    let topicName = base;
+    while (p.entities.some(e => e.topic === topicName)) {
+      topicName = `${base}_${suffix++}`;
+    }
+    const next = createGroupEntity(id, "Twist", topicName, profile.output);
+    update({ entities: [...p.entities, next] });
+    setSelected(id);
   }
 
   async function handleFileImport(event: ChangeEvent<HTMLInputElement>) {
@@ -286,13 +302,17 @@ function StudioWorkspace({ user, signOutUser }: { user: AuthUser; signOutUser: (
                 {codeVisible ? <ChevronDown /> : <ChevronUp />}
                 {translate(codeVisible ? "Hide code" : "Show code")}
               </Button>
-              <Button variant="outline" size="sm" disabled={p.entities.length >= 12 || pubs >= 10} onClick={() => add("publisher")}>
+              <Button variant="outline" size="sm" disabled={p.entities.length >= 16 || pubs >= 10} onClick={() => add("publisher")}>
                 <Plus />
                 {translate("Publisher + timer")}
               </Button>
-              <Button variant="outline" size="sm" disabled={p.entities.length >= 12 || subs >= 5} onClick={() => add("subscriber")}>
+              <Button variant="outline" size="sm" disabled={p.entities.length >= 16 || subs >= 8} onClick={() => add("subscriber")}>
                 <Plus />
                 {translate("Subscriber")}
+              </Button>
+              <Button variant="outline" size="sm" disabled={p.entities.length >= 16 || subs >= 8} onClick={addGroup}>
+                <Layers />
+                {translate("Actuator group")}
               </Button>
               {wizardStep > 0 && <BoardHelp board={p.board} />}
             </div>
@@ -303,7 +323,12 @@ function StudioWorkspace({ user, signOutUser }: { user: AuthUser; signOutUser: (
           </div>
 
           <div data-code-hidden={!codeVisible} className="canvas-wrap relative bg-card">
-            <VisualEditor project={p} selected={selected} onSelect={setSelected} />
+            <VisualEditor
+              project={p}
+              selected={selected}
+              onSelect={setSelected}
+              onUpdate={entity => update({ entities: p.entities.map(e => e.id === entity.id ? entity : e) })}
+            />
             <div className="pointer-events-none absolute left-4 top-4 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-md border border-border bg-card/90 px-3 py-2 text-[10px] text-muted-foreground">
               <span className="size-1.5 shrink-0 rounded-full bg-primary" />
               <span className="min-w-0 truncate" title={p.nodeName}>
@@ -328,7 +353,7 @@ function StudioWorkspace({ user, signOutUser }: { user: AuthUser; signOutUser: (
                 <CheckCircle2 size={15} className="text-secondary dark:text-primary" />
               )}
               {translate(errors.length ? `${errors.length} pending adjustments` : "Valid configuration")}
-              <span className="ml-auto text-[10px] text-muted-foreground">{translate("Limits: 10 publishers · 5 subscribers")}</span>
+              <span className="ml-auto text-[10px] text-muted-foreground">{translate("Limits: 10 publishers · 8 subscribers")}</span>
             </div>
             {errors.length > 0 && (
               <ul role="alert" className="space-y-1 rounded-lg bg-amber-500/5 p-3 text-xs text-foreground">

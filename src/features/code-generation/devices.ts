@@ -1,16 +1,79 @@
-import { boardProfile, type BoardProfile, devices, type DeviceEntity, type Project, type DeviceDefinition } from "../program";
+import { boardProfile, type BoardProfile, devices, type DeviceEntity, type Project, type DeviceDefinition, type GroupEntity } from "../program";
 import { pinName } from "./pins";
 import { cppString } from "./strings";
 import type { Fragment } from "./robot";
 export function pwmAssignments(p: Project): number[][] {
-  let servo = 0, buzzer = 2, pwm = 2 + p.entities.filter(e=>e.kind==="device"&&e.device==="passive-buzzer").length*2;
+  const servoCount = p.entities.reduce((count, e) => {
+    if (e.kind === "device" && e.device === "servo") return count + 1;
+    if (e.kind === "group") return count + e.channels.filter(c => c.target === "servo").length;
+    return count;
+  }, 0);
+  const servoReservation = Math.max(2, Math.ceil(servoCount / 2) * 2);
+  let servo = 0, buzzer = servoReservation, pwm = servoReservation + p.entities.filter(e => e.kind === "device" && e.device === "passive-buzzer").length * 2;
   // Each tone owns a complete timer pair; changing its frequency must not retune other outputs.
-  return p.entities.map(e=>{
-    if(e.kind === "robot"&&e.behavior === "motor-pwm")return [pwm++];
-    if(e.kind !== "device")return [];
-    if(e.device === "passive-buzzer"){const channel=buzzer;buzzer+=2;return [channel];}
-    return devices[e.device].pins.filter(r=>r.mode === "pwm").map(()=>e.device === "servo" ? servo++ : pwm++);
+  return p.entities.map(e => {
+    if (e.kind === "robot" && e.behavior === "motor-pwm") return [pwm++];
+    if (e.kind === "group") {
+      return e.channels
+        .filter(c => c.target === "servo" || c.target === "pwm")
+        .map(c => c.target === "servo" ? servo++ : pwm++);
+    }
+    if (e.kind !== "device") return [];
+    if (e.device === "passive-buzzer") { const channel = buzzer; buzzer += 2; return [channel]; }
+    return devices[e.device].pins.filter(r => r.mode === "pwm").map(() => e.device === "servo" ? servo++ : pwm++);
   });
+}
+export function groupFragment(e: GroupEntity, i: number, channels: number[], board: BoardProfile = boardProfile("denky32"), instance = 1): Fragment {
+  const pkg = "geometry_msgs";
+  const msgType = e.message;
+  const bits = board.servoBits, scale = 2 ** bits - 1;
+  const f: Fragment = {
+    includes: [`#include <${pkg}/msg/${msgType.toLowerCase()}.h>`, "#include <math.h>"],
+    dependencies: [],
+    declarations: `${pkg}__msg__${msgType} msg_${i};\nrcl_subscription_t sub_${i};`,
+    hardware: "",
+    callbacks: "",
+    loop: "",
+    setup: `    ok = ros.createSubscription(sub_${i}, ROSIDL_GET_MSG_TYPE_SUPPORT(${pkg}, msg, ${msgType}), ${cppString(e.topic)}, &msg_${i}, subscription_callback_${i});\n    ros.require(ok, ${cppString(`Failed to create subscriber ${e.topic}`)});`
+  };
+
+  const hardwareLines: string[] = [];
+  const callbackLines: string[] = [];
+  let pwmIndex = 0;
+
+  for (const ch of e.channels) {
+    if (ch.target === "disabled") continue;
+    const pName = pinName(e, instance, ch.field);
+    const fieldAccess = msgType === "Twist"
+      ? (ch.field.startsWith("linear.") || ch.field.startsWith("angular.") ? `msg->${ch.field}` : `msg->linear.${ch.field}`)
+      : `msg->${ch.field}`;
+    const varSuffix = ch.field.replace(/\./g, "_");
+
+    if (ch.target === "servo") {
+      const channel = channels[pwmIndex++];
+      hardwareLines.push(`    ros.require(ledcSetup(${channel}, 50, ${bits}) > 0, "Failed to configure PWM");`);
+      hardwareLines.push(`    ledcAttachPin(${pName}, ${channel});`);
+      hardwareLines.push(`    ledcWrite(${channel}, static_cast<uint32_t>(1450.0 * ${scale}.0 / 20000.0));`);
+      callbackLines.push(`    const int angle_${varSuffix} = constrain(static_cast<int>(${fieldAccess}), 0, 180);`);
+      callbackLines.push(`    const double pulse_${varSuffix} = 500.0 + angle_${varSuffix} * (1900.0 / 180.0);`);
+      callbackLines.push(`    ledcWrite(${channel}, static_cast<uint32_t>(pulse_${varSuffix} * ${scale}.0 / 20000.0));`);
+    } else if (ch.target === "pwm") {
+      const channel = channels[pwmIndex++];
+      hardwareLines.push(`    ros.require(ledcSetup(${channel}, 1000, 8) > 0, "Failed to configure PWM");`);
+      hardwareLines.push(`    ledcAttachPin(${pName}, ${channel});`);
+      hardwareLines.push(`    ledcWrite(${channel}, 0);`);
+      callbackLines.push(`    const int duty_${varSuffix} = constrain(static_cast<int>(${fieldAccess}), 0, 255);`);
+      callbackLines.push(`    ledcWrite(${channel}, static_cast<uint32_t>(${ch.activeLow ? `255 - duty_${varSuffix}` : `duty_${varSuffix}`}));`);
+    } else if (ch.target === "digital") {
+      hardwareLines.push(`    pinMode(${pName}, OUTPUT);`);
+      hardwareLines.push(`    digitalWrite(${pName}, ${ch.activeLow ? "HIGH" : "LOW"});`);
+      callbackLines.push(`    digitalWrite(${pName}, (${fieldAccess}) > 0 ? ${ch.activeLow ? "LOW" : "HIGH"} : ${ch.activeLow ? "HIGH" : "LOW"});`);
+    }
+  }
+
+  f.hardware = hardwareLines.join("\n");
+  f.callbacks = `void subscription_callback_${i}(const void * input) {\n    if (input == nullptr) return;\n    const auto * msg = static_cast<const ${pkg}__msg__${msgType} *>(input);\n${callbackLines.join("\n")}\n}`;
+  return f;
 }
 export function deviceFragment(e: DeviceEntity, i: number, channels: number[], board: BoardProfile = boardProfile("denky32"), instance = 1): Fragment {
  const d: DeviceDefinition=devices[e.device], p=Object.fromEntries(d.pins.map(role=>[role.key,pinName(e,instance,role.key)])), pub=d.direction==="publisher", pkg=["Vector3","Twist"].includes(d.message)?"geometry_msgs":"std_msgs";

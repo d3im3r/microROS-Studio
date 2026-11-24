@@ -27,7 +27,8 @@ inline void portEXIT_CRITICAL_ISR(int*) {}
 inline void portENTER_CRITICAL(int*) {}
 inline void portEXIT_CRITICAL(int*) {}
 inline void pinMode(int,int) {}
-inline void digitalWrite(int,int) {}
+inline int test_gpio_state[48] = {};
+inline void digitalWrite(int pin, int val) { if (pin >= 0 && pin < 48) test_gpio_state[pin] = val; }
 inline bool digitalRead(int) { return false; }
 inline uint32_t millis() { return test_clock_ms; }
 inline void delay(int ms) { if(static_cast<unsigned>(ms)>test_max_delay_ms)test_max_delay_ms=ms; }
