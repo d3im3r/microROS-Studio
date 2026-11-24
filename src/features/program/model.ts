@@ -28,9 +28,10 @@ const subscriber = z.object({
 });
 export const groupChannelSchema = z.object({
   field: z.string(),
-  target: z.enum(["servo", "pwm", "digital", "disabled"]).optional(),
-  source: z.enum(["adc", "digital", "disabled"]).optional(),
-  pin: z.number().int().min(0).max(48),
+  target: z.enum(["servo", "pwm", "digital", "buzzer", "disabled"]).optional(),
+  source: z.enum(["adc", "digital", "lm35", "touch", "internal-temperature", "hcsr04", "disabled"]).optional(),
+  pin: z.number().int().min(-1).max(48),
+  echoPin: z.number().int().min(0).max(48).optional(),
   activeLow: z.boolean().default(false)
 });
 export const groupSchema = z.object({
@@ -119,12 +120,12 @@ export const projectSchema = z.object({
   if (hasVl && hasLegacyTof) ctx.addIssue({ code: "custom", message: "Replace the triple ToF block with individual VL53L0X sensors to coordinate XSHUT and addresses." });
   const vlSensors=p.entities.filter(e=>e.kind==="device"&&e.device==="vl53l0x");
   for(const e of vlSensors){if(e.kind!=="device")continue;if(e.pins.xshut===-1&&(vlSensors.length>1||e.address!==0x29))ctx.addIssue({code:"custom",message:"VL53L0X: without XSHUT, use a single sensor at address 0x29. Multiple sensors require separate XSHUT pins."});}
-  let pubs = 0, subs = 0, generalPwm = 0, servos = 0;
+  let pubs = 0, subs = 0, generalPwm = 0, servos = 0, buzzers = 0;
   p.entities.forEach(e => {
     if (e.kind === "publisher") pubs++;
     if (e.kind === "subscriber") subs++;
     if (e.kind === "robot") { if (robotDefinitions[e.behavior].direction === "publisher") pubs++; else subs++; if (e.behavior === "differential") pubs++; if(e.behavior === "motor-pwm")generalPwm++; }
-    if (e.kind === "device") { if (devices[e.device].direction === "publisher") pubs++; else subs++; if(e.device === "servo")servos++;else generalPwm+=pwmCount(e); }
+    if (e.kind === "device") { if (devices[e.device].direction === "publisher") pubs++; else subs++; if(e.device === "servo")servos++;else if (e.device === "passive-buzzer") buzzers++; else generalPwm+=pwmCount(e); }
     if (e.kind === "group") {
       const isPub = (e.direction ?? "subscriber") === "publisher";
       if (isPub) {
@@ -134,6 +135,7 @@ export const projectSchema = z.object({
         for (const ch of e.channels) {
           if (ch.target === "servo") servos++;
           else if (ch.target === "pwm") generalPwm++;
+          else if (ch.target === "buzzer") buzzers++;
         }
       }
     }
@@ -146,7 +148,8 @@ export const projectSchema = z.object({
   });
   if(pubs>10||subs>8)ctx.addIssue({code:"custom",message:"The base firmware supports up to 10 publishers and 8 subscribers."});
   const servoReservation = Math.max(2, Math.ceil(servos / 2) * 2);
-  if(servos>4||generalPwm>board.pwmChannels-servoReservation)ctx.addIssue({code:"custom",message:`PWM: ${board.title} supports up to 4 servos and ${board.pwmChannels-servoReservation} additional channels in this profile (separate 50 Hz and 1 kHz timers).${p.entities.some(e=>e.kind==="device"&&e.device==="passive-buzzer")?" Each passive buzzer reserves 2 channels for an independent tone timer.":""}`});
+  const buzzerReservation = buzzers * 2;
+  if(servos>4||generalPwm>board.pwmChannels-servoReservation-buzzerReservation)ctx.addIssue({code:"custom",message:`PWM: ${board.title} supports up to 4 servos and ${board.pwmChannels-servoReservation-buzzerReservation} additional channels in this profile (separate 50 Hz and 1 kHz timers).${(buzzers > 0 || p.entities.some(e=>e.kind==="device"&&e.device==="passive-buzzer"))?" Each passive buzzer reserves 2 channels for an independent tone timer.":""}`});
   if (p.transport === "serial" || board.family !== "esp32") { pins.add(board.uart.tx); pins.add(board.uart.rx); pinOwners.set(board.uart.tx, "Serial TX"); pinOwners.set(board.uart.rx, "Serial RX"); }
   p.entities.forEach((e, i) => {
     const entityTopics = [e.topic, ...(e.kind === "robot" && e.behavior === "differential" ? [e.outputTopic] : [])];
@@ -160,30 +163,43 @@ export const projectSchema = z.object({
     const title = e.kind === "device" ? devices[e.device].title : e.kind === "robot" ? robotDefinitions[e.behavior].title : e.kind === "group" ? (isGroupPub ? "Sensor group" : "Actuator group") : e.kind === "subscriber" ? "LED / digital output" : "Publisher";
     const owner = `${title} (${e.topic})`;
     if(e.kind==="device"&&e.device==="touch"&&!boardPins(p.board,"touch").length)ctx.addIssue({code:"custom",path:["entities",i],message:`Touch unavailable on ${board.title}.`});
-    const used = e.kind === "device"
-      ? devices[e.device].pins.filter(role=>!(role.optional&&e.pins[role.key]===-1)).map(role=>({pin:e.pins[role.key],label:role.label}))
-      : e.kind === "group"
-      ? (isGroupPub
-          ? e.channels.filter(ch => ch.source && ch.source !== "disabled").map(ch => ({ pin: ch.pin, label: `${ch.field} (${ch.source})` }))
-          : e.channels.filter(ch => ch.target && ch.target !== "disabled").map(ch => ({ pin: ch.pin, label: `${ch.field} (${ch.target})` })))
-      : (e.kind === "subscriber" ? [e.pin] : e.kind === "robot" ? robotPins(e) : []).map((pin,index)=>({pin,label:`pin ${index+1}`}));
-    for (const {pin,label} of used) {
-      const current = `${owner} · ${label}`;
-      let mode: "input" | "output" | "adc" | "pwm" | "touch" = "output";
-      if (e.kind === "device") {
-        mode = devices[e.device].pins.find(role=>role.label===label)!.mode;
-      } else if (e.kind === "robot" && e.behavior === "wheel-encoders") {
-        mode = "input";
-      } else if (e.kind === "group") {
-        if (isGroupPub) {
-          const ch = e.channels.find(c => c.pin === pin);
-          mode = ch?.source === "adc" ? "adc" : "input";
-        } else {
-          const ch = e.channels.find(c => c.pin === pin);
-          mode = ch?.target === "digital" ? "output" : "pwm";
+    
+    const groupUsedPins: { pin: number; label: string; mode: "input" | "output" | "adc" | "pwm" | "touch" }[] = [];
+    if (e.kind === "group") {
+      if (isGroupPub) {
+        for (const ch of e.channels) {
+          if (!ch.source || ch.source === "disabled" || ch.source === "internal-temperature") continue;
+          if (ch.source === "hcsr04") {
+            if (ch.pin !== undefined && ch.pin !== -1) groupUsedPins.push({ pin: ch.pin, label: `${ch.field} (Trigger)`, mode: "output" });
+            if (ch.echoPin !== undefined && ch.echoPin !== -1) groupUsedPins.push({ pin: ch.echoPin, label: `${ch.field} (Echo)`, mode: "input" });
+          } else if (ch.source === "touch") {
+            groupUsedPins.push({ pin: ch.pin, label: `${ch.field} (touch)`, mode: "touch" });
+          } else if (ch.source === "adc" || ch.source === "lm35") {
+            groupUsedPins.push({ pin: ch.pin, label: `${ch.field} (${ch.source})`, mode: "adc" });
+          } else {
+            groupUsedPins.push({ pin: ch.pin, label: `${ch.field} (${ch.source})`, mode: "input" });
+          }
+        }
+      } else {
+        for (const ch of e.channels) {
+          if (!ch.target || ch.target === "disabled") continue;
+          groupUsedPins.push({
+            pin: ch.pin,
+            label: `${ch.field} (${ch.target})`,
+            mode: ch.target === "digital" ? "output" : "pwm"
+          });
         }
       }
-      if (!boardPins(p.board, mode).includes(pin)) ctx.addIssue({code:"custom",path:["entities",i],message:`${current}: GPIO ${pin} unavailable for ${mode === "adc" ? "ADC1" : mode === "input" ? "input" : "output"} on ${board.title}.`});
+    }
+
+    const used = e.kind === "device"
+      ? devices[e.device].pins.filter(role=>!(role.optional&&e.pins[role.key]===-1)).map(role=>({pin:e.pins[role.key],label:role.label,mode:role.mode}))
+      : e.kind === "group"
+      ? groupUsedPins
+      : (e.kind === "subscriber" ? [e.pin] : e.kind === "robot" ? robotPins(e) : []).map((pin,index)=>({pin,label:`pin ${index+1}`,mode:e.kind === "robot" && e.behavior === "wheel-encoders" ? "input" as const : "output" as const}));
+    for (const {pin,label,mode} of used) {
+      const current = `${owner} · ${label}`;
+      if (!boardPins(p.board, mode).includes(pin)) ctx.addIssue({code:"custom",path:["entities",i],message:`${current}: GPIO ${pin} unavailable for ${mode === "adc" ? "ADC1" : mode === "input" ? "input" : mode === "touch" ? "touch" : "output"} on ${board.title}.`});
       if (pins.has(pin)) ctx.addIssue({ code: "custom", path: ["entities", i], message: `GPIO ${pin} conflict: ${pinOwners.get(pin) ?? "reserved resource"} and ${current}. Assign a different GPIO.` });
       else pinOwners.set(pin,current);
       pins.add(pin);
@@ -255,7 +271,16 @@ export function validateEntityIssues(project: Project): Record<string, string[]>
       ? devices[e.device].pins.filter(role => !(role.optional && e.pins[role.key] === -1)).map(role => e.pins[role.key])
       : e.kind === "group"
       ? (isGroupPub
-          ? e.channels.filter(ch => ch.source && ch.source !== "disabled").map(ch => ch.pin)
+          ? e.channels.flatMap(ch => {
+              if (!ch.source || ch.source === "disabled" || ch.source === "internal-temperature") return [];
+              if (ch.source === "hcsr04") {
+                const arr: number[] = [];
+                if (ch.pin !== undefined && ch.pin !== -1) arr.push(ch.pin);
+                if (ch.echoPin !== undefined && ch.echoPin !== -1) arr.push(ch.echoPin);
+                return arr;
+              }
+              return ch.pin !== -1 ? [ch.pin] : [];
+            })
           : e.channels.filter(ch => ch.target && ch.target !== "disabled").map(ch => ch.pin))
       : e.kind === "subscriber" ? [e.pin] : e.kind === "robot" ? robotPins(e) : [];
     for (const pin of usedPins) {

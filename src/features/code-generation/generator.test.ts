@@ -1122,3 +1122,124 @@ int main() {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("multichannel groups support specialized sensors (LM35, touch, internal temp, HC-SR04) and buzzer actuator", () => {
+  const dir = mkdtempSync(join(tmpdir(), "microros-specialized-groups-"));
+  try {
+    copyFileSync("tests/firmware-stubs/Arduino.h", join(dir, "Arduino.h"));
+    for (const file of [
+      "MicroROSHelper.h",
+      "geometry_msgs/msg/twist.h", "geometry_msgs/msg/vector3.h",
+      "std_msgs/msg/int32.h"
+    ]) {
+      const full = join(dir, file);
+      mkdirSync(join(full, ".."), { recursive: true });
+      writeFileSync(full, "#pragma once\n");
+    }
+
+    const demux: GroupEntity = {
+      id: "demux_specialized",
+      kind: "group",
+      direction: "subscriber",
+      topic: "/actuators_cmd",
+      message: "Twist",
+      channels: [
+        { field: "linear.x", target: "buzzer", pin: 18 },
+        { field: "linear.y", target: "servo", pin: 19 },
+        { field: "linear.z", target: "digital", pin: 21 },
+        { field: "angular.x", target: "disabled", pin: 22 },
+        { field: "angular.y", target: "disabled", pin: 23 },
+        { field: "angular.z", target: "disabled", pin: 25 }
+      ]
+    };
+
+    const mux: GroupEntity = {
+      id: "mux_specialized",
+      kind: "group",
+      direction: "publisher",
+      topic: "/sensors_data",
+      message: "Twist",
+      period: 100,
+      channels: [
+        { field: "linear.x", source: "lm35", pin: 34 },
+        { field: "linear.y", source: "touch", pin: 4 },
+        { field: "linear.z", source: "internal-temperature", pin: -1 },
+        { field: "angular.x", source: "hcsr04", pin: 5, echoPin: 17 },
+        { field: "angular.y", source: "disabled", pin: 32 },
+        { field: "angular.z", source: "disabled", pin: 33 }
+      ]
+    };
+
+    const p: Project = {
+      ...defaultProject,
+      entities: [demux, mux]
+    };
+
+    const issues = validateProject(p);
+    assert.deepEqual(issues, []);
+
+    const { main } = generateFiles(p);
+
+    assert.match(main, /const uint8_t group1_LINEAR_X = 18;/);
+    assert.match(main, /const uint8_t group1_LINEAR_Y = 19;/);
+    assert.match(main, /const uint8_t group1_LINEAR_Z = 21;/);
+    assert.match(main, /const uint8_t group2_LINEAR_X = 34;/);
+    assert.match(main, /const uint8_t group2_LINEAR_Y = 4;/);
+    assert.doesNotMatch(main, /group2_LINEAR_Z/);
+    assert.match(main, /const uint8_t group2_ANGULAR_X = 5;/);
+    assert.match(main, /const uint8_t group2_ANGULAR_X_ECHO = 17;/);
+
+    assert.match(main, /analogReadMilliVolts\(group2_LINEAR_X\) \/ 10\.0f/);
+    assert.match(main, /touchRead\(group2_LINEAR_Y\)/);
+    assert.match(main, /temperatureRead\(\)/);
+    assert.match(main, /pulseIn\(group2_ANGULAR_X_ECHO, HIGH, 25000UL\)/);
+    assert.match(main, /ledcWriteTone\(2, static_cast<uint32_t>\(clamped_linear_x\)\)/);
+
+    const harness = `
+#include <cassert>
+#include <cmath>
+
+int main() {
+    setup();
+
+    // 1. Verify MUX sensor callback
+    rcl_timer_t dummyTimer;
+    timer_callback_1(&dummyTimer, 0);
+    // LM35 stub returns 250mV -> 25.0 C
+    assert(msg_1.linear.x == 25.0f);
+    // Touch stub returns 30
+    assert(msg_1.linear.y == 30.0f);
+    // Internal temp stub returns 42
+    assert(msg_1.linear.z == 42.0f);
+    // HCSR04 stub pulseIn returns 1000 -> 1000 * 0.0001715f = 0.1715m
+    assert(fabs(msg_1.angular.x - 0.1715f) < 0.001f);
+
+    // 2. Verify DEMUX buzzer callback
+    geometry_msgs__msg__Twist cmd;
+    cmd.linear.x = 440.0; // 440 Hz (A4)
+    cmd.linear.y = 90.0;  // 90 deg servo
+    cmd.linear.z = 1.0;   // Digital ON
+    cmd.angular.x = 0; cmd.angular.y = 0; cmd.angular.z = 0;
+    subscription_callback_0(&cmd);
+
+    // Channel 2 is reserved for buzzer (channel 0 for servo, buzzer on channel 2)
+    assert(test_tone_frequency[2] == 440);
+
+    // Silence buzzer
+    cmd.linear.x = 0.0;
+    subscription_callback_0(&cmd);
+    assert(test_tone_frequency[2] == 0);
+
+    return 0;
+}
+`;
+    writeFileSync(join(dir, "main.cpp"), main + harness);
+    const binary = join(dir, "specialized_groups");
+    const compiled = spawnSync("g++", ["-std=c++17", "-DTEST_CAPTURE_LOGS", "-DMICRO_ROS_TRANSPORT_ARDUINO_WIFI", "-I", dir, join(dir, "main.cpp"), "-o", binary], { encoding: "utf8" });
+    assert.equal(compiled.status, 0, compiled.stderr);
+    const result = spawnSync(binary, [], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

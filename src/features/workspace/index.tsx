@@ -8,8 +8,6 @@ import {
   ArrowDownToLine,
   ArrowUpRight,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   ChevronRight,
   CircleHelp,
   Cpu,
@@ -293,16 +291,6 @@ function StudioWorkspace({ user, signOutUser }: { user: AuthUser; signOutUser: (
         <main className="studio-editor w-full">
           <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-5 py-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-expanded={codeVisible}
-                aria-controls="generated-code-panel"
-                onClick={() => setCodeVisible(visible => !visible)}
-              >
-                {codeVisible ? <ChevronDown /> : <ChevronUp />}
-                {translate(codeVisible ? "Hide code" : "Show code")}
-              </Button>
               <Button variant="outline" size="sm" disabled={p.entities.length >= 16 || pubs >= 10} onClick={() => add("publisher")}>
                 <Plus />
                 {translate("Publisher + timer")}
@@ -346,8 +334,13 @@ function StudioWorkspace({ user, signOutUser }: { user: AuthUser; signOutUser: (
             </div>
           </div>
 
-          <div ref={codeRef} id="generated-code-panel" className="scroll-mt-24" hidden={!codeVisible}>
-            <CodePreview files={files} platformioEnabled={platformioEnabled} />
+          <div ref={codeRef} id="generated-code-panel" className="scroll-mt-24">
+            <CodePreview
+              files={files}
+              platformioEnabled={platformioEnabled}
+              codeVisible={codeVisible}
+              onToggleVisible={() => setCodeVisible(visible => !visible)}
+            />
           </div>
 
           <div aria-label={translate("Configuration status")} className="configuration-status space-y-2 break-words border-t border-border px-4 py-3">

@@ -32,7 +32,11 @@ export function generateFiles(input: Project) {
   const stepper=p.entities.some(e=>e.kind==="device"&&e.device==="stepper28byj");
   const pinConstants=p.entities.flatMap((e,i)=>{
     const isGroupPub = e.kind === "group" && (e.direction ?? "subscriber") === "publisher";
-    const entries: [string,number][] = e.kind==="subscriber"?[["signal",e.pin]]:e.kind==="device"?devices[e.device].pins.filter(role=>e.pins[role.key]!==-1).map(role=>[role.key,e.pins[role.key]]):e.kind==="group"?(isGroupPub ? e.channels.filter(ch=>ch.source && ch.source!=="disabled").map(ch=>[ch.field,ch.pin]) : e.channels.filter(ch=>ch.target && ch.target!=="disabled").map(ch=>[ch.field,ch.pin])):e.kind==="robot"? (e.behavior==="tof-triple"?["center","left","right"]:e.behavior==="wheel-encoders"?["leftA","leftB","rightA","rightB"]:e.behavior==="motor-pwm"?["pin","in1","in2"]:[]).map(role=>[role,Number(e[role as keyof typeof e])]):[];
+    const entries: [string,number][] = e.kind==="subscriber"?[["signal",e.pin]]:e.kind==="device"?devices[e.device].pins.filter(role=>e.pins[role.key]!==-1).map(role=>[role.key,e.pins[role.key]]):e.kind==="group"?(isGroupPub ? e.channels.filter(ch=>ch.source && ch.source!=="disabled" && ch.pin!==-1).flatMap(ch=>{
+      const list: [string, number][] = [[ch.field, ch.pin]];
+      if (ch.source === "hcsr04" && ch.echoPin !== undefined && ch.echoPin !== -1) list.push([`${ch.field}_echo`, ch.echoPin]);
+      return list;
+    }) : e.channels.filter(ch=>ch.target && ch.target!=="disabled" && ch.pin!==-1).map(ch=>[ch.field,ch.pin])):e.kind==="robot"? (e.behavior==="tof-triple"?["center","left","right"]:e.behavior==="wheel-encoders"?["leftA","leftB","rightA","rightB"]:e.behavior==="motor-pwm"?["pin","in1","in2"]:[]).map(role=>[role,Number(e[role as keyof typeof e])]):[];
     return entries.map(([role,value])=>`const uint8_t ${pinName(e,instances[i],role)} = ${value};`);
   });
   if(i2c)pinConstants.push(`const uint8_t i2c_SDA = ${bus.sda};`,`const uint8_t i2c_SCL = ${bus.scl};`);

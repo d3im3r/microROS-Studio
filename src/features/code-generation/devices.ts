@@ -9,15 +9,24 @@ export function pwmAssignments(p: Project): number[][] {
     return count;
   }, 0);
   const servoReservation = Math.max(2, Math.ceil(servoCount / 2) * 2);
-  let servo = 0, buzzer = servoReservation, pwm = servoReservation + p.entities.filter(e => e.kind === "device" && e.device === "passive-buzzer").length * 2;
+  const buzzerCount = p.entities.reduce((count, e) => {
+    if (e.kind === "device" && e.device === "passive-buzzer") return count + 1;
+    if (e.kind === "group" && (e.direction ?? "subscriber") === "subscriber") return count + e.channels.filter(c => c.target === "buzzer").length;
+    return count;
+  }, 0);
+  let servo = 0, buzzer = servoReservation, pwm = servoReservation + buzzerCount * 2;
   // Each tone owns a complete timer pair; changing its frequency must not retune other outputs.
   return p.entities.map(e => {
     if (e.kind === "robot" && e.behavior === "motor-pwm") return [pwm++];
     if (e.kind === "group") {
       if ((e.direction ?? "subscriber") === "publisher") return [];
       return e.channels
-        .filter(c => c.target === "servo" || c.target === "pwm")
-        .map(c => c.target === "servo" ? servo++ : pwm++);
+        .filter(c => c.target === "servo" || c.target === "pwm" || c.target === "buzzer")
+        .map(c => {
+          if (c.target === "servo") return servo++;
+          if (c.target === "buzzer") { const ch = buzzer; buzzer += 2; return ch; }
+          return pwm++;
+        });
     }
     if (e.kind !== "device") return [];
     if (e.device === "passive-buzzer") { const channel = buzzer; buzzer += 2; return [channel]; }
@@ -63,6 +72,26 @@ export function groupFragment(e: GroupEntity, i: number, channels: number[], boa
         hardwareLines.push(`    pinMode(${pName}, ${pullup});`);
         const condition = ch.activeLow ? "== LOW" : "== HIGH";
         readLines.push(`    ${fieldAccess} = (digitalRead(${pName}) ${condition}) ? 1.0 : 0.0;`);
+      } else if (ch.source === "lm35") {
+        hasAdc = true;
+        hardwareLines.push(`    pinMode(${pName}, INPUT);`);
+        hardwareLines.push(`    analogSetPinAttenuation(${pName}, ADC_11db);`);
+        readLines.push(`    ${fieldAccess} = analogReadMilliVolts(${pName}) / 10.0f;`);
+      } else if (ch.source === "touch") {
+        const varSuffix = ch.field.replace(/\./g, "_");
+        readLines.push(`    const uint32_t touch_${varSuffix} = touchRead(${pName});`);
+        readLines.push(`    ${fieldAccess} = touch_${varSuffix} > INT32_MAX ? INT32_MAX : static_cast<int32_t>(touch_${varSuffix});`);
+      } else if (ch.source === "internal-temperature") {
+        readLines.push(`    ${fieldAccess} = temperatureRead();`);
+      } else if (ch.source === "hcsr04") {
+        const pEchoName = pinName(e, instance, `${ch.field}_echo`);
+        const varSuffix = ch.field.replace(/\./g, "_");
+        hardwareLines.push(`    pinMode(${pName}, OUTPUT); digitalWrite(${pName}, LOW);`);
+        hardwareLines.push(`    pinMode(${pEchoName}, INPUT);`);
+        readLines.push(`    digitalWrite(${pName}, LOW); delayMicroseconds(2);`);
+        readLines.push(`    digitalWrite(${pName}, HIGH); delayMicroseconds(10); digitalWrite(${pName}, LOW);`);
+        readLines.push(`    const unsigned long duration_${varSuffix} = pulseIn(${pEchoName}, HIGH, 25000UL);`);
+        readLines.push(`    ${fieldAccess} = duration_${varSuffix} ? duration_${varSuffix} * 0.0001715f : -1.0f;`);
       }
     }
     if (hasAdc) {
@@ -115,6 +144,18 @@ export function groupFragment(e: GroupEntity, i: number, channels: number[], boa
       hardwareLines.push(`    pinMode(${pName}, OUTPUT);`);
       hardwareLines.push(`    digitalWrite(${pName}, ${ch.activeLow ? "HIGH" : "LOW"});`);
       callbackLines.push(`    digitalWrite(${pName}, (${fieldAccess}) > 0 ? ${ch.activeLow ? "LOW" : "HIGH"} : ${ch.activeLow ? "HIGH" : "LOW"});`);
+    } else if (ch.target === "buzzer") {
+      const channel = channels[pwmIndex++];
+      hardwareLines.push(`    ros.require(ledcSetup(${channel}, 1000, 10) > 0, "Failed to configure PWM");`);
+      hardwareLines.push(`    ledcAttachPin(${pName}, ${channel});`);
+      hardwareLines.push(`    ledcWrite(${channel}, 0);`);
+      callbackLines.push(`    const int32_t freq_${varSuffix} = static_cast<int32_t>(${fieldAccess});`);
+      callbackLines.push(`    if (freq_${varSuffix} <= 0) {`);
+      callbackLines.push(`        ledcWriteTone(${channel}, 0);`);
+      callbackLines.push(`    } else {`);
+      callbackLines.push(`        const int32_t clamped_${varSuffix} = constrain(freq_${varSuffix}, 100, 10000);`);
+      callbackLines.push(`        ledcWriteTone(${channel}, static_cast<uint32_t>(clamped_${varSuffix}));`);
+      callbackLines.push(`    }`);
     }
   }
 

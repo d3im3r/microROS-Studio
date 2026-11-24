@@ -4,7 +4,7 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { DeviceProperties } from "../device-catalog";
 import { RobotProperties } from "../robot-catalog";
-import { boardProfile, boardLedHint, outputPinLabel, absoluteTopic, defaultGroupChannels, type Project, type Entity, type GroupEntity, type GroupChannel } from "../program";
+import { boardProfile, boardPins, boardLedHint, outputPinLabel, absoluteTopic, defaultGroupChannels, type Project, type Entity, type GroupEntity, type GroupChannel } from "../program";
 
 export function GroupProperties({ entity: e, update, board = "denky32" }: { entity: GroupEntity; update: (e: GroupEntity) => void; board?: Project["board"] }) {
   const { translate } = useLanguage();
@@ -15,12 +15,17 @@ export function GroupProperties({ entity: e, update, board = "denky32" }: { enti
     servo: "Servo PWM (50 Hz)",
     pwm: "PWM Output (1 kHz)",
     digital: "Digital Output (On/Off)",
+    buzzer: "Passive Buzzer (Tones in Hz)",
     disabled: "Disabled"
   };
 
   const sourceLabels: Record<string, string> = {
     adc: "Analog ADC1 (0–3.3V)",
     digital: "Digital Input (Pull-up)",
+    lm35: "LM35 Temperature (°C)",
+    touch: "Capacitive Touch",
+    "internal-temperature": "ESP32 Internal Temperature (°C)",
+    hcsr04: "HC-SR04 Ultrasonic (Meters)",
     disabled: "Disabled"
   };
 
@@ -50,6 +55,25 @@ export function GroupProperties({ entity: e, update, board = "denky32" }: { enti
     const next = [...e.channels];
     next[index] = { ...next[index], ...patch };
     update({ ...e, channels: next });
+  }
+
+  function handleSourceChange(index: number, source: GroupChannel["source"]) {
+    let pin = e.channels[index].pin;
+    let echoPin = e.channels[index].echoPin;
+    if (source === "internal-temperature") {
+      pin = -1;
+    } else if (source === "touch") {
+      const touchPins = boardPins(board, "touch");
+      if (!touchPins.includes(pin)) pin = touchPins[0] ?? pin;
+    } else if (source === "adc" || source === "lm35") {
+      if (!profile.adc.includes(pin)) pin = profile.adc[0] ?? pin;
+    } else if (source === "hcsr04") {
+      if (!profile.output.includes(pin)) pin = profile.output[0] ?? pin;
+      if (echoPin === undefined || !profile.input.includes(echoPin)) echoPin = profile.input[0] ?? 4;
+    } else if (source === "digital") {
+      if (!profile.input.includes(pin)) pin = profile.input[0] ?? pin;
+    }
+    updateChannel(index, { source, pin, echoPin });
   }
 
   return (
@@ -122,21 +146,75 @@ export function GroupProperties({ entity: e, update, board = "denky32" }: { enti
                   {translate("Signal source")}
                   <select
                     value={ch.source ?? "disabled"}
-                    onChange={ev => updateChannel(idx, { source: ev.target.value as GroupChannel["source"] })}
+                    onChange={ev => handleSourceChange(idx, ev.target.value as GroupChannel["source"])}
                   >
                     <option value="adc">{translate("Analog ADC1 (0–3.3V)")}</option>
                     <option value="digital">{translate("Digital Input (Pull-up)")}</option>
+                    <option value="lm35">{translate("LM35 Temperature (°C)")}</option>
+                    <option value="touch">{translate("Capacitive Touch")}</option>
+                    <option value="internal-temperature">{translate("ESP32 Internal Temperature (°C)")}</option>
+                    <option value="hcsr04">{translate("HC-SR04 Ultrasonic (Meters)")}</option>
                     <option value="disabled">{translate("Disabled")}</option>
                   </select>
                 </label>
-                {ch.source && ch.source !== "disabled" && (
+                {ch.source === "internal-temperature" && (
+                  <div className="text-[11px] text-muted-foreground italic py-1">
+                    {translate("Uses internal ESP32 temperature sensor (no GPIO required)")}
+                  </div>
+                )}
+                {ch.source === "hcsr04" && (
+                  <div className="space-y-2">
+                    <label>
+                      {translate("Trigger GPIO")}
+                      <select
+                        value={ch.pin}
+                        onChange={ev => updateChannel(idx, { pin: Number(ev.target.value) })}
+                      >
+                        {profile.output.map(pin => (
+                          <option key={pin} value={pin}>
+                            GPIO {pin}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      {translate("Echo GPIO")}
+                      <select
+                        value={ch.echoPin ?? profile.input[0]}
+                        onChange={ev => updateChannel(idx, { echoPin: Number(ev.target.value) })}
+                      >
+                        {profile.input.map(pin => (
+                          <option key={pin} value={pin}>
+                            GPIO {pin}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
+                {ch.source === "touch" && (
+                  <label>
+                    {translate("Touch GPIO")}
+                    <select
+                      value={ch.pin}
+                      onChange={ev => updateChannel(idx, { pin: Number(ev.target.value) })}
+                    >
+                      {boardPins(board, "touch").map(pin => (
+                        <option key={pin} value={pin}>
+                          GPIO {pin}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {ch.source && ["adc", "lm35", "digital"].includes(ch.source) && (
                   <label>
                     {translate("Input GPIO")}
                     <select
                       value={ch.pin}
                       onChange={ev => updateChannel(idx, { pin: Number(ev.target.value) })}
                     >
-                      {(ch.source === "adc" ? profile.adc : profile.input).map(pin => (
+                      {(ch.source === "adc" || ch.source === "lm35" ? profile.adc : profile.input).map(pin => (
                         <option key={pin} value={pin}>
                           GPIO {pin}
                         </option>
@@ -168,6 +246,7 @@ export function GroupProperties({ entity: e, update, board = "denky32" }: { enti
                     <option value="servo">{translate("Servo PWM (50 Hz)")}</option>
                     <option value="pwm">{translate("PWM Output (1 kHz)")}</option>
                     <option value="digital">{translate("Digital Output (On/Off)")}</option>
+                    <option value="buzzer">{translate("Passive Buzzer (Tones in Hz)")}</option>
                     <option value="disabled">{translate("Disabled")}</option>
                   </select>
                 </label>
