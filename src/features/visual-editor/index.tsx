@@ -3,7 +3,7 @@ import { useLanguage } from "../language";
 
 import { useEffect, useRef, useState } from "react";
 import { Background, Panel, PanOnScrollMode, Handle, Position, ReactFlow, applyNodeChanges, type Node, type NodeProps, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
-import { Radio, Timer, Cpu, Lightbulb, TriangleAlert, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus, Layers, LayoutGrid } from "lucide-react";
+import { Radio, Timer, Cpu, Lightbulb, TriangleAlert, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus, Layers } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { useTheme } from "../theme";
 import { entityDirection, entityMessage, entityTitle, devices, validateEntityIssues, defaultGroupChannels, boardProfile, boardPins, outputPinLabel, type GroupEntity, type GroupChannel, type Entity, type DeviceDefinition } from "../program";
@@ -89,7 +89,7 @@ function GroupNode({ data, selected }: NodeProps) {
     <div
       data-conflict={hasError ? "true" : undefined}
       title={hasError ? translate(errorText) : undefined}
-      style={{ borderColor: color, width: 390 }}
+      style={{ borderColor: color, width: 365 }}
       className="rounded-xl border-2 bg-card/95 shadow-xl backdrop-blur-sm text-xs"
     >
       {!isPub && <Handle type="target" position={Position.Left} />}
@@ -97,17 +97,17 @@ function GroupNode({ data, selected }: NodeProps) {
         <div className="flex items-center gap-2">
           <Layers size={16} className={isPub ? "text-primary" : "text-secondary dark:text-primary"} />
           <select
-            className="nodrag nopan min-w-[125px] rounded border border-border bg-background px-2 py-1 text-xs font-semibold text-foreground focus:ring-1 focus:ring-ring"
+            className="nodrag nopan rounded border border-border bg-background px-2 py-1 text-xs font-bold text-foreground"
             value={isPub ? "publisher" : "subscriber"}
             onChange={e => toggleDirection(e.target.value as "publisher" | "subscriber")}
           >
-            <option value="subscriber">DEMUX · OUT</option>
-            <option value="publisher">MUX · IN</option>
+            <option value="subscriber">DEMUX</option>
+            <option value="publisher">MUX</option>
           </select>
           {hasError && <TriangleAlert size={14} className="text-destructive shrink-0" />}
         </div>
         <select
-          className="nodrag nopan min-w-[85px] rounded border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground focus:ring-1 focus:ring-ring"
+          className="nodrag nopan rounded border border-border bg-background px-2 py-1 text-xs font-medium text-foreground"
           value={entity.message}
           onChange={e => changeMsg(e.target.value as "Twist" | "Vector3")}
         >
@@ -117,10 +117,10 @@ function GroupNode({ data, selected }: NodeProps) {
       </div>
 
       <div className="border-b border-border px-3.5 py-1.5 flex items-center justify-between text-xs">
-        <span className="font-mono font-medium text-foreground truncate max-w-[250px]" title={entity.topic}>
+        <span className="font-mono font-semibold text-foreground truncate max-w-[240px]" title={entity.topic}>
           {entity.topic}
         </span>
-        <span className="text-muted-foreground text-xs font-medium shrink-0">
+        <span className="text-muted-foreground text-[11px] font-medium shrink-0">
           {entity.channels.filter(c => isPub ? (c.source && c.source !== "disabled") : (c.target && c.target !== "disabled")).length} {translate("active")}
         </span>
       </div>
@@ -131,20 +131,20 @@ function GroupNode({ data, selected }: NodeProps) {
           return (
             <div
               key={ch.field}
-              className={`flex items-center justify-between gap-2 rounded-lg border px-2 py-1.5 text-xs ${
+              className={`grid grid-cols-[68px_1fr_95px] items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs ${
                 isDisabled
                   ? "border-dashed border-border/50 bg-muted/20 opacity-55"
                   : "border-border bg-background shadow-xs"
               }`}
             >
-              <span className="font-mono text-xs font-medium text-foreground min-w-[65px] truncate" title={ch.field}>
+              <span className="font-mono text-xs font-semibold text-foreground truncate" title={ch.field}>
                 {ch.field}
               </span>
 
               {isPub ? (
                 <>
                   <select
-                    className="nodrag nopan flex-1 min-w-[110px] rounded border border-border bg-muted/50 px-2 py-1 text-xs text-foreground"
+                    className="nodrag nopan w-full rounded border border-border bg-muted/50 px-1.5 py-1 text-xs text-foreground"
                     value={ch.source ?? "disabled"}
                     onChange={e => changeChannelSource(idx, e.target.value as GroupChannel["source"])}
                   >
@@ -157,12 +157,12 @@ function GroupNode({ data, selected }: NodeProps) {
                     <option value="disabled">{translate("Disabled")}</option>
                   </select>
                   {ch.source === "internal-temperature" ? (
-                    <span className="text-xs text-muted-foreground italic px-2">—</span>
+                    <div className="text-center text-xs text-muted-foreground italic">—</div>
                   ) : ch.source === "hcsr04" ? (
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="grid grid-cols-2 gap-1 w-full">
                       <select
                         title={translate("Trigger GPIO")}
-                        className="nodrag nopan rounded border border-border bg-muted/50 px-1.5 py-1 font-mono text-xs text-foreground"
+                        className="nodrag nopan w-full rounded border border-border bg-muted/50 px-1 py-1 font-mono text-[11px] text-foreground"
                         value={ch.pin}
                         onChange={e => changeChannelPin(idx, Number(e.target.value))}
                       >
@@ -172,7 +172,7 @@ function GroupNode({ data, selected }: NodeProps) {
                       </select>
                       <select
                         title={translate("Echo GPIO")}
-                        className="nodrag nopan rounded border border-border bg-muted/50 px-1.5 py-1 font-mono text-xs text-foreground"
+                        className="nodrag nopan w-full rounded border border-border bg-muted/50 px-1 py-1 font-mono text-[11px] text-foreground"
                         value={ch.echoPin ?? profile.input[0]}
                         onChange={e => changeChannelEchoPin(idx, Number(e.target.value))}
                       >
@@ -183,7 +183,7 @@ function GroupNode({ data, selected }: NodeProps) {
                     </div>
                   ) : ch.source && ch.source !== "disabled" ? (
                     <select
-                      className="nodrag nopan rounded border border-border bg-muted/50 px-2 py-1 font-mono text-xs text-foreground min-w-[95px] shrink-0"
+                      className="nodrag nopan w-full rounded border border-border bg-muted/50 px-1.5 py-1 font-mono text-xs text-foreground"
                       value={ch.pin}
                       onChange={e => changeChannelPin(idx, Number(e.target.value))}
                     >
@@ -194,13 +194,13 @@ function GroupNode({ data, selected }: NodeProps) {
                       ))}
                     </select>
                   ) : (
-                    <span className="text-xs text-muted-foreground italic px-2">—</span>
+                    <div className="text-center text-xs text-muted-foreground italic">—</div>
                   )}
                 </>
               ) : (
                 <>
                   <select
-                    className="nodrag nopan flex-1 min-w-[125px] rounded border border-border bg-muted/50 px-2 py-1 text-xs text-foreground"
+                    className="nodrag nopan w-full rounded border border-border bg-muted/50 px-1.5 py-1 text-xs text-foreground"
                     value={ch.target ?? "disabled"}
                     onChange={e => changeChannelTarget(idx, e.target.value as GroupChannel["target"])}
                   >
@@ -212,7 +212,7 @@ function GroupNode({ data, selected }: NodeProps) {
                   </select>
                   {ch.target && ch.target !== "disabled" ? (
                     <select
-                      className="nodrag nopan rounded border border-border bg-muted/50 px-2 py-1 font-mono text-xs text-foreground min-w-[95px] shrink-0"
+                      className="nodrag nopan w-full rounded border border-border bg-muted/50 px-1.5 py-1 font-mono text-xs text-foreground"
                       value={ch.pin}
                       onChange={e => changeChannelPin(idx, Number(e.target.value))}
                     >
@@ -223,7 +223,7 @@ function GroupNode({ data, selected }: NodeProps) {
                       ))}
                     </select>
                   ) : (
-                    <span className="text-xs text-muted-foreground italic px-2">—</span>
+                    <div className="text-center text-xs text-muted-foreground italic">—</div>
                   )}
                 </>
               )}
@@ -599,7 +599,6 @@ export function VisualEditor({ project, selected, onSelect, onUpdate }: { projec
       await container.current?.requestFullscreen?.().catch(() => {});
     }
   }
-  const [layoutEpoch, setLayoutEpoch] = useState(0);
   const [nodes, setNodes] = useState<Node[]>([]);
   useEffect(() => {
     const next = buildDefaultNodes(project, selected, onUpdate);
@@ -609,29 +608,17 @@ export function VisualEditor({ project, selected, onSelect, onUpdate }: { projec
     });
   }, [project, selected]);
 
-  function autoArrange() {
-    const next = buildDefaultNodes(project, selected, onUpdate);
-    setNodes(next);
-    setLayoutEpoch(e => e + 1);
-    if (flow) {
-      flow.setNodes(next);
-      setTimeout(() => {
-        void flow.fitView({ padding: 0.18, minZoom: 0.08, maxZoom: 1.5, duration: 250 });
-      }, 50);
-    }
-  }
   const entityIssues = validateEntityIssues(project);
   const edges = project.entities.map(e => ({ id: `edge-${e.id}`, source: (entityDirection(e) === "publisher") ? `${e.id}:behavior` : e.id, target: (entityDirection(e) === "publisher") ? e.id : `${e.id}:behavior`, animated: true, style: { stroke: entityIssues[e.id]?.length ? "var(--destructive)" : (entityDirection(e) === "publisher") ? "var(--ring)" : "var(--diagram-output-accent, var(--secondary))" } }));
   function change(changes: NodeChange[]) { setNodes(n => applyNodeChanges(changes, n)); }
   return <div ref={container} data-expanded={expanded} aria-label={translate("Program diagram")} className={expanded ? "diagram-fullscreen bg-card" : "absolute inset-0 min-h-0 min-w-0 bg-card"}>
-  {size.width > 0 && size.height > 0 && <ReactFlow key={`diagram-${layoutEpoch}`} style={{ width: size.width, height: size.height }} onInit={setFlow} onMove={(_,viewport)=>setZoom(viewport.zoom)} panOnScroll panOnScrollMode={PanOnScrollMode.Vertical} zoomOnScroll={false} zoomOnPinch zoomActivationKeyCode="Control" preventScrolling nodes={nodes} edges={edges} onNodesChange={change} nodeTypes={nodeTypes} onNodeClick={(_, n) => onSelect(n.id.replace(":behavior", ""))} onPaneClick={() => onSelect(null)} nodesConnectable={false} deleteKeyCode={null} fitView minZoom={.08} maxZoom={2} colorMode={theme}>
+  {size.width > 0 && size.height > 0 && <ReactFlow style={{ width: size.width, height: size.height }} onInit={setFlow} onMove={(_,viewport)=>setZoom(viewport.zoom)} panOnScroll panOnScrollMode={PanOnScrollMode.Vertical} zoomOnScroll={false} zoomOnPinch zoomActivationKeyCode="Control" preventScrolling nodes={nodes} edges={edges} onNodesChange={change} nodeTypes={nodeTypes} onNodeClick={(_, n) => onSelect(n.id.replace(":behavior", ""))} onPaneClick={() => onSelect(null)} nodesConnectable={false} deleteKeyCode={null} fitView minZoom={.08} maxZoom={2} colorMode={theme}>
     <Background color="var(--border)" gap={22} size={1} />
     <Panel position="bottom-right" style={{ left: "auto", right: 8, top: "auto", bottom: 8, margin: 0 }}><div role="group" aria-label={translate("Diagram controls")} className="flex items-center gap-1 rounded-lg border border-border bg-card/95 p-1 shadow-sm"><div className="flex items-center gap-1">
       <Button variant="ghost" size="icon" aria-label={translate("Zoom in diagram")} title={translate("Zoom in")} disabled={!flow || zoom >= 2} onClick={()=>void flow?.zoomIn({duration:150})}><ZoomIn/></Button>
       <Button variant="ghost" size="icon" aria-label={translate("Zoom out diagram")} title={translate("Zoom out")} disabled={!flow || zoom <= .08} onClick={()=>void flow?.zoomOut({duration:150})}><ZoomOut/></Button>
       <span aria-label={translate("Zoom level")} className="mono min-w-10 text-center text-xs text-muted-foreground">{translate(Math.round(zoom*100))}{translate("%")}</span></div>
       <Button variant="ghost" size="icon" aria-label={translate("Fit diagram")} title={translate("Fit all blocks")} onClick={()=>void flow?.fitView({padding:.18,minZoom:.08,maxZoom:1.5,duration:200})}><Focus/></Button>
-      <Button variant="ghost" size="icon" aria-label={translate("Auto-arrange diagram")} title={translate("Auto-arrange diagram")} onClick={autoArrange}><LayoutGrid/></Button>
       <Button variant="ghost" size="icon" aria-label={translate(expanded?"Exit fullscreen":"Fullscreen diagram")} title={translate(expanded?"Exit fullscreen (Esc)":"Fullscreen")} onClick={()=>void toggleFullscreen()}>{expanded?<Minimize2/>:<Maximize2/>}</Button>
     </div></Panel>
     <Panel position="top-right" className="pointer-events-none !m-2"><span className="block max-w-[calc(100vw-48px)] rounded bg-card/90 px-2 py-1 text-right text-xs text-muted-foreground font-mono">{translate("Scroll ↑↓ · Ctrl + scroll: zoom · Shift + scroll ↔")}</span></Panel>

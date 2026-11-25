@@ -32,6 +32,10 @@ code, pre, .mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', m
 .react-flow select {
   font-size: 12px;
   line-height: 1.25rem;
+  padding: 4px 6px !important;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 .react-flow select option {
   background-color: var(--card);
