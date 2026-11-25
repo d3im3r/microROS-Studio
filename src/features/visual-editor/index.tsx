@@ -89,25 +89,25 @@ function GroupNode({ data, selected }: NodeProps) {
     <div
       data-conflict={hasError ? "true" : undefined}
       title={hasError ? translate(errorText) : undefined}
-      style={{ borderColor: color, width: 340 }}
-      className="rounded-xl border-2 bg-card/95 shadow-xl backdrop-blur-sm"
+      style={{ borderColor: color, width: 390 }}
+      className="rounded-xl border-2 bg-card/95 shadow-xl backdrop-blur-sm text-xs"
     >
       {!isPub && <Handle type="target" position={Position.Left} />}
-      <div className="flex items-center justify-between border-b border-border bg-muted/40 px-3 py-2">
-        <div className="flex items-center gap-1.5">
-          <Layers size={15} className={isPub ? "text-primary" : "text-secondary dark:text-primary"} />
+      <div className="flex items-center justify-between border-b border-border bg-muted/40 px-3.5 py-2">
+        <div className="flex items-center gap-2">
+          <Layers size={16} className={isPub ? "text-primary" : "text-secondary dark:text-primary"} />
           <select
-            className="nodrag nopan rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] font-bold text-foreground"
+            className="nodrag nopan min-w-[125px] rounded border border-border bg-background px-2 py-1 text-xs font-semibold text-foreground focus:ring-1 focus:ring-ring"
             value={isPub ? "publisher" : "subscriber"}
             onChange={e => toggleDirection(e.target.value as "publisher" | "subscriber")}
           >
             <option value="subscriber">DEMUX · OUT</option>
             <option value="publisher">MUX · IN</option>
           </select>
-          {hasError && <TriangleAlert size={13} className="text-destructive shrink-0" />}
+          {hasError && <TriangleAlert size={14} className="text-destructive shrink-0" />}
         </div>
         <select
-          className="nodrag nopan rounded border border-border bg-background px-2 py-0.5 font-mono text-[10px] text-foreground"
+          className="nodrag nopan min-w-[85px] rounded border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground focus:ring-1 focus:ring-ring"
           value={entity.message}
           onChange={e => changeMsg(e.target.value as "Twist" | "Vector3")}
         >
@@ -116,11 +116,11 @@ function GroupNode({ data, selected }: NodeProps) {
         </select>
       </div>
 
-      <div className="border-b border-border px-3.5 py-1.5 flex items-center justify-between text-[10px]">
-        <span className="font-mono font-medium text-foreground truncate max-w-[170px]" title={entity.topic}>
+      <div className="border-b border-border px-3.5 py-1.5 flex items-center justify-between text-xs">
+        <span className="font-mono font-medium text-foreground truncate max-w-[250px]" title={entity.topic}>
           {entity.topic}
         </span>
-        <span className="text-muted-foreground">
+        <span className="text-muted-foreground text-xs font-medium shrink-0">
           {entity.channels.filter(c => isPub ? (c.source && c.source !== "disabled") : (c.target && c.target !== "disabled")).length} {translate("active")}
         </span>
       </div>
@@ -131,20 +131,20 @@ function GroupNode({ data, selected }: NodeProps) {
           return (
             <div
               key={ch.field}
-              className={`flex items-center justify-between gap-1.5 rounded-md border p-1 text-[11px] ${
+              className={`flex items-center justify-between gap-2 rounded-lg border px-2 py-1.5 text-xs ${
                 isDisabled
-                  ? "border-dashed border-border/50 bg-muted/20 opacity-50"
+                  ? "border-dashed border-border/50 bg-muted/20 opacity-55"
                   : "border-border bg-background shadow-xs"
               }`}
             >
-              <span className="font-mono text-[10px] font-medium text-foreground min-w-[55px] truncate" title={ch.field}>
+              <span className="font-mono text-xs font-medium text-foreground min-w-[65px] truncate" title={ch.field}>
                 {ch.field}
               </span>
 
               {isPub ? (
                 <>
                   <select
-                    className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 text-[10px] text-foreground"
+                    className="nodrag nopan flex-1 min-w-[110px] rounded border border-border bg-muted/50 px-2 py-1 text-xs text-foreground"
                     value={ch.source ?? "disabled"}
                     onChange={e => changeChannelSource(idx, e.target.value as GroupChannel["source"])}
                   >
@@ -157,12 +157,12 @@ function GroupNode({ data, selected }: NodeProps) {
                     <option value="disabled">{translate("Disabled")}</option>
                   </select>
                   {ch.source === "internal-temperature" ? (
-                    <span className="text-[10px] text-muted-foreground italic px-1.5">—</span>
+                    <span className="text-xs text-muted-foreground italic px-2">—</span>
                   ) : ch.source === "hcsr04" ? (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 shrink-0">
                       <select
                         title={translate("Trigger GPIO")}
-                        className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 font-mono text-[10px] text-foreground"
+                        className="nodrag nopan rounded border border-border bg-muted/50 px-1.5 py-1 font-mono text-xs text-foreground"
                         value={ch.pin}
                         onChange={e => changeChannelPin(idx, Number(e.target.value))}
                       >
@@ -172,7 +172,7 @@ function GroupNode({ data, selected }: NodeProps) {
                       </select>
                       <select
                         title={translate("Echo GPIO")}
-                        className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 font-mono text-[10px] text-foreground"
+                        className="nodrag nopan rounded border border-border bg-muted/50 px-1.5 py-1 font-mono text-xs text-foreground"
                         value={ch.echoPin ?? profile.input[0]}
                         onChange={e => changeChannelEchoPin(idx, Number(e.target.value))}
                       >
@@ -183,7 +183,7 @@ function GroupNode({ data, selected }: NodeProps) {
                     </div>
                   ) : ch.source && ch.source !== "disabled" ? (
                     <select
-                      className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 font-mono text-[10px] text-foreground"
+                      className="nodrag nopan rounded border border-border bg-muted/50 px-2 py-1 font-mono text-xs text-foreground min-w-[95px] shrink-0"
                       value={ch.pin}
                       onChange={e => changeChannelPin(idx, Number(e.target.value))}
                     >
@@ -194,13 +194,13 @@ function GroupNode({ data, selected }: NodeProps) {
                       ))}
                     </select>
                   ) : (
-                    <span className="text-[10px] text-muted-foreground italic px-1.5">—</span>
+                    <span className="text-xs text-muted-foreground italic px-2">—</span>
                   )}
                 </>
               ) : (
                 <>
                   <select
-                    className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 text-[10px] text-foreground"
+                    className="nodrag nopan flex-1 min-w-[125px] rounded border border-border bg-muted/50 px-2 py-1 text-xs text-foreground"
                     value={ch.target ?? "disabled"}
                     onChange={e => changeChannelTarget(idx, e.target.value as GroupChannel["target"])}
                   >
@@ -212,7 +212,7 @@ function GroupNode({ data, selected }: NodeProps) {
                   </select>
                   {ch.target && ch.target !== "disabled" ? (
                     <select
-                      className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 font-mono text-[10px] text-foreground"
+                      className="nodrag nopan rounded border border-border bg-muted/50 px-2 py-1 font-mono text-xs text-foreground min-w-[95px] shrink-0"
                       value={ch.pin}
                       onChange={e => changeChannelPin(idx, Number(e.target.value))}
                     >
@@ -223,7 +223,7 @@ function GroupNode({ data, selected }: NodeProps) {
                       ))}
                     </select>
                   ) : (
-                    <span className="text-[10px] text-muted-foreground italic px-1.5">—</span>
+                    <span className="text-xs text-muted-foreground italic px-2">—</span>
                   )}
                 </>
               )}
@@ -254,29 +254,29 @@ function ProgramNode({ data, selected }: NodeProps) {
     <div
       data-conflict={hasError ? "true" : undefined}
       title={hasError ? translate(errorText) : undefined}
-      style={{ borderColor: hasError ? "var(--destructive)" : selected ? color : "var(--border)", width: 236 }}
-      className="rounded-xl border-2 bg-card/95 shadow-xl backdrop-blur-sm"
+      style={{ borderColor: hasError ? "var(--destructive)" : selected ? color : "var(--border)", width: 240 }}
+      className="rounded-xl border-2 bg-card/95 shadow-xl backdrop-blur-sm text-xs"
     >
       {kind !== "timer" && kind !== "subscriber" && <Handle type="target" position={Position.Left} />}
-      <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5">
-        <Icon size={15} style={{ color }} />
-        <span className="text-[10px] font-bold tracking-widest" style={{ color }}>{translate(String(data.label))}</span>
-        {hasError && <TriangleAlert size={13} aria-label={translate("Conflict")} className="ml-auto shrink-0 text-destructive" />}
+      <div className="flex items-center gap-2 border-b border-border px-3.5 py-2">
+        <Icon size={16} style={{ color }} />
+        <span className="text-xs font-semibold tracking-wider" style={{ color }}>{translate(String(data.label))}</span>
+        {hasError && <TriangleAlert size={14} aria-label={translate("Conflict")} className="ml-auto shrink-0 text-destructive" />}
       </div>
-      <div className="px-3.5 py-2.5 space-y-1.5">
+      <div className="px-3.5 py-2.5 space-y-2">
         <div className="mono break-words text-xs font-semibold text-foreground">{translate(String(data.title))}</div>
         {(!isBehaviorNode || (!entity || (entity.kind !== "subscriber" && entity.kind !== "device"))) && (
-          <div className="break-words text-[11px] text-muted-foreground">{translate(String(data.detail))}</div>
+          <div className="break-words text-xs text-muted-foreground">{translate(String(data.detail))}</div>
         )}
 
         {isBehaviorNode && entity && project && onUpdate && profile && (
           <>
             {/* Subscriber digital output pin selector */}
             {entity.kind === "subscriber" && (
-              <div className="pt-1.5 border-t border-border flex items-center justify-between gap-1.5">
-                <span className="text-[10px] text-muted-foreground font-mono">{translate("Output GPIO")}</span>
+              <div className="pt-2 border-t border-border flex items-center justify-between gap-1.5">
+                <span className="text-xs text-muted-foreground font-mono">{translate("Output GPIO")}</span>
                 <select
-                  className="nodrag nopan rounded border border-border bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] text-foreground max-w-[140px]"
+                  className="nodrag nopan rounded border border-border bg-muted/50 px-2 py-1 font-mono text-xs text-foreground max-w-[145px]"
                   value={entity.pin}
                   onChange={e => {
                     const pin = Number(e.target.value);
@@ -306,12 +306,12 @@ function ProgramNode({ data, selected }: NodeProps) {
             {entity.kind === "device" && (() => {
               const d = devices[entity.device] as DeviceDefinition;
               return (
-                <div className="pt-1.5 border-t border-border space-y-1.5">
+                <div className="pt-2 border-t border-border space-y-2">
                   {d.addresses && (
                     <div className="flex items-center justify-between gap-1.5">
-                      <span className="text-[10px] text-muted-foreground font-mono">{translate("I2C Address")}</span>
+                      <span className="text-xs text-muted-foreground font-mono">{translate("I2C")}</span>
                       <select
-                        className="nodrag nopan rounded border border-border bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] text-foreground max-w-[130px]"
+                        className="nodrag nopan rounded border border-border bg-muted/50 px-2 py-1 font-mono text-xs text-foreground max-w-[135px]"
                         value={entity.address}
                         onChange={e => onUpdate({ ...entity, address: Number(e.target.value) })}
                       >
@@ -328,11 +328,11 @@ function ProgramNode({ data, selected }: NodeProps) {
                     const currentPin = entity.pins[role.key];
                     return (
                       <div key={role.key} className="flex items-center justify-between gap-1.5">
-                        <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[80px]" title={translate(role.label)}>
+                        <span className="text-xs text-muted-foreground font-mono truncate max-w-[85px]" title={translate(role.label)}>
                           {translate(role.label)}
                         </span>
                         <select
-                          className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 font-mono text-[10px] text-foreground max-w-[130px]"
+                          className="nodrag nopan rounded border border-border bg-muted/50 px-2 py-1 font-mono text-xs text-foreground max-w-[135px]"
                           value={currentPin ?? -1}
                           onChange={e => {
                             const pin = Number(e.target.value);
@@ -373,18 +373,18 @@ function ProgramNode({ data, selected }: NodeProps) {
 function getEntityHeight(entity: Entity): number {
   if (entity.kind === "group") {
     const channelCount = entity.channels?.length ?? 6;
-    return 80 + channelCount * 36;
+    return 85 + channelCount * 40;
   }
   if (entity.kind === "device") {
     const d = devices[entity.device] as DeviceDefinition;
     const pinCount = d?.pins?.length ?? 0;
     const addressCount = d?.addresses ? 1 : 0;
-    return 105 + (pinCount + addressCount) * 30;
+    return 115 + (pinCount + addressCount) * 34;
   }
   if (entity.kind === "subscriber") {
-    return 135;
+    return 140;
   }
-  return 115;
+  return 120;
 }
 
 function buildDefaultNodes(project: Project, selected: string | null, onUpdate?: (entity: Entity) => void): Node[] {
@@ -394,7 +394,7 @@ function buildDefaultNodes(project: Project, selected: string | null, onUpdate?:
   project.entities.forEach((entity) => {
     const y = currentY;
     const entityHeight = getEntityHeight(entity);
-    currentY += Math.max(entityHeight, 115) + 35;
+    currentY += Math.max(entityHeight, 120) + 40;
     const pub = entityDirection(entity) === "publisher";
     const issues = entityIssues[entity.id] ?? [];
     const hasError = issues.length > 0;
@@ -404,7 +404,7 @@ function buildDefaultNodes(project: Project, selected: string | null, onUpdate?:
       next.push({
         id: entity.id,
         type: "program",
-        position: { x: pub ? 440 : 50, y },
+        position: { x: pub ? 480 : 50, y },
         selected: entity.id === selected,
         data: {
           kind: pub ? "publisher" : "subscriber",
@@ -421,7 +421,7 @@ function buildDefaultNodes(project: Project, selected: string | null, onUpdate?:
       next.push({
         id: `${entity.id}:behavior`,
         type: "groupNode",
-        position: { x: pub ? 50 : 440, y },
+        position: { x: pub ? 50 : 480, y },
         selected: entity.id === selected,
         data: {
           entity,
@@ -435,7 +435,7 @@ function buildDefaultNodes(project: Project, selected: string | null, onUpdate?:
       next.push({
         id: entity.id,
         type: "program",
-        position: { x: pub ? 440 : 50, y },
+        position: { x: pub ? 480 : 50, y },
         selected: entity.id === selected,
         data: {
           kind: pub ? "publisher" : "subscriber",
@@ -452,7 +452,7 @@ function buildDefaultNodes(project: Project, selected: string | null, onUpdate?:
       next.push({
         id: `${entity.id}:behavior`,
         type: "program",
-        position: { x: pub ? 50 : 440, y },
+        position: { x: pub ? 50 : 480, y },
         selected: entity.id === selected,
         data: {
           entity,
@@ -599,6 +599,7 @@ export function VisualEditor({ project, selected, onSelect, onUpdate }: { projec
       await container.current?.requestFullscreen?.().catch(() => {});
     }
   }
+  const [layoutEpoch, setLayoutEpoch] = useState(0);
   const [nodes, setNodes] = useState<Node[]>([]);
   useEffect(() => {
     const next = buildDefaultNodes(project, selected, onUpdate);
@@ -611,15 +612,19 @@ export function VisualEditor({ project, selected, onSelect, onUpdate }: { projec
   function autoArrange() {
     const next = buildDefaultNodes(project, selected, onUpdate);
     setNodes(next);
-    setTimeout(() => {
-      void flow?.fitView({ padding: 0.18, minZoom: 0.08, maxZoom: 1.5, duration: 250 });
-    }, 30);
+    setLayoutEpoch(e => e + 1);
+    if (flow) {
+      flow.setNodes(next);
+      setTimeout(() => {
+        void flow.fitView({ padding: 0.18, minZoom: 0.08, maxZoom: 1.5, duration: 250 });
+      }, 50);
+    }
   }
   const entityIssues = validateEntityIssues(project);
   const edges = project.entities.map(e => ({ id: `edge-${e.id}`, source: (entityDirection(e) === "publisher") ? `${e.id}:behavior` : e.id, target: (entityDirection(e) === "publisher") ? e.id : `${e.id}:behavior`, animated: true, style: { stroke: entityIssues[e.id]?.length ? "var(--destructive)" : (entityDirection(e) === "publisher") ? "var(--ring)" : "var(--diagram-output-accent, var(--secondary))" } }));
   function change(changes: NodeChange[]) { setNodes(n => applyNodeChanges(changes, n)); }
   return <div ref={container} data-expanded={expanded} aria-label={translate("Program diagram")} className={expanded ? "diagram-fullscreen bg-card" : "absolute inset-0 min-h-0 min-w-0 bg-card"}>
-  {size.width > 0 && size.height > 0 && <ReactFlow style={{ width: size.width, height: size.height }} onInit={setFlow} onMove={(_,viewport)=>setZoom(viewport.zoom)} panOnScroll panOnScrollMode={PanOnScrollMode.Vertical} zoomOnScroll={false} zoomOnPinch zoomActivationKeyCode="Control" preventScrolling nodes={nodes} edges={edges} onNodesChange={change} nodeTypes={nodeTypes} onNodeClick={(_, n) => onSelect(n.id.replace(":behavior", ""))} onPaneClick={() => onSelect(null)} nodesConnectable={false} deleteKeyCode={null} fitView minZoom={.08} maxZoom={2} colorMode={theme}>
+  {size.width > 0 && size.height > 0 && <ReactFlow key={`diagram-${layoutEpoch}`} style={{ width: size.width, height: size.height }} onInit={setFlow} onMove={(_,viewport)=>setZoom(viewport.zoom)} panOnScroll panOnScrollMode={PanOnScrollMode.Vertical} zoomOnScroll={false} zoomOnPinch zoomActivationKeyCode="Control" preventScrolling nodes={nodes} edges={edges} onNodesChange={change} nodeTypes={nodeTypes} onNodeClick={(_, n) => onSelect(n.id.replace(":behavior", ""))} onPaneClick={() => onSelect(null)} nodesConnectable={false} deleteKeyCode={null} fitView minZoom={.08} maxZoom={2} colorMode={theme}>
     <Background color="var(--border)" gap={22} size={1} />
     <Panel position="bottom-right" style={{ left: "auto", right: 8, top: "auto", bottom: 8, margin: 0 }}><div role="group" aria-label={translate("Diagram controls")} className="flex items-center gap-1 rounded-lg border border-border bg-card/95 p-1 shadow-sm"><div className="flex items-center gap-1">
       <Button variant="ghost" size="icon" aria-label={translate("Zoom in diagram")} title={translate("Zoom in")} disabled={!flow || zoom >= 2} onClick={()=>void flow?.zoomIn({duration:150})}><ZoomIn/></Button>
@@ -629,6 +634,6 @@ export function VisualEditor({ project, selected, onSelect, onUpdate }: { projec
       <Button variant="ghost" size="icon" aria-label={translate("Auto-arrange diagram")} title={translate("Auto-arrange diagram")} onClick={autoArrange}><LayoutGrid/></Button>
       <Button variant="ghost" size="icon" aria-label={translate(expanded?"Exit fullscreen":"Fullscreen diagram")} title={translate(expanded?"Exit fullscreen (Esc)":"Fullscreen")} onClick={()=>void toggleFullscreen()}>{expanded?<Minimize2/>:<Maximize2/>}</Button>
     </div></Panel>
-    <Panel position="top-right" className="pointer-events-none !m-2"><span className="block max-w-[calc(100vw-48px)] rounded bg-card/90 px-2 py-1 text-right text-[10px] text-muted-foreground">{translate("Scroll ↑↓ · Ctrl + scroll: zoom · Shift + scroll ↔")}</span></Panel>
+    <Panel position="top-right" className="pointer-events-none !m-2"><span className="block max-w-[calc(100vw-48px)] rounded bg-card/90 px-2 py-1 text-right text-xs text-muted-foreground font-mono">{translate("Scroll ↑↓ · Ctrl + scroll: zoom · Shift + scroll ↔")}</span></Panel>
   </ReactFlow>}</div>;
 }

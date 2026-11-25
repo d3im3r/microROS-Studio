@@ -29,6 +29,15 @@ code, pre, .mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', m
   background: transparent !important;
   border: none !important;
 }
+.react-flow select {
+  font-size: 12px;
+  line-height: 1.25rem;
+}
+.react-flow select option {
+  background-color: var(--card);
+  color: var(--foreground);
+  font-size: 12px;
+}
 .react-flow__edge-path { stroke-width: 2; }
 .react-flow__handle { width: 8px; height: 8px; background: var(--primary); border: 2px solid var(--background); }
 .panel-title { font-size: 10px; font-weight: 700; letter-spacing: .16em; color: var(--muted-foreground); text-transform: uppercase; }
