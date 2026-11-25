@@ -13,7 +13,22 @@ code, pre, .mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', m
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
 .react-flow__attribution { background: var(--card) !important; color: var(--muted-foreground) !important; }
 .react-flow__controls button { background: var(--card) !important; border-color: var(--border) !important; fill: var(--foreground) !important; }
-.react-flow__node { border-radius: 12px; }
+.react-flow__node {
+  border-radius: 12px;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+}
+.react-flow__node-group,
+.react-flow__node-groupNode,
+.react-flow__node-default,
+.react-flow__node-input,
+.react-flow__node-output,
+.react-flow__node-program {
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+}
 .react-flow__edge-path { stroke-width: 2; }
 .react-flow__handle { width: 8px; height: 8px; background: var(--primary); border: 2px solid var(--background); }
 .panel-title { font-size: 10px; font-weight: 700; letter-spacing: .16em; color: var(--muted-foreground); text-transform: uppercase; }

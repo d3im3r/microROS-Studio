@@ -6,7 +6,7 @@ import { Background, Panel, PanOnScrollMode, Handle, Position, ReactFlow, applyN
 import { Radio, Timer, Cpu, Lightbulb, TriangleAlert, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus, Layers, LayoutGrid } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { useTheme } from "../theme";
-import { entityDirection, entityMessage, entityTitle, devices, validateEntityIssues, defaultGroupChannels, boardProfile, boardPins, type GroupEntity, type GroupChannel, type Entity } from "../program";
+import { entityDirection, entityMessage, entityTitle, devices, validateEntityIssues, defaultGroupChannels, boardProfile, boardPins, outputPinLabel, type GroupEntity, type GroupChannel, type Entity, type DeviceDefinition } from "../program";
 import type { Project } from "../program";
 
 function GroupNode({ data, selected }: NodeProps) {
@@ -125,7 +125,7 @@ function GroupNode({ data, selected }: NodeProps) {
         </span>
       </div>
 
-      <div className="p-2 space-y-1.5 max-h-[220px] overflow-y-auto">
+      <div className="p-2 space-y-1.5">
         {entity.channels.map((ch, idx) => {
           const isDisabled = isPub ? (!ch.source || ch.source === "disabled") : (!ch.target || ch.target === "disabled");
           return (
@@ -239,24 +239,162 @@ function GroupNode({ data, selected }: NodeProps) {
 function ProgramNode({ data, selected }: NodeProps) {
   const { translate } = useLanguage();
   const kind = data.kind as string;
+  const entity = data.entity as Entity | undefined;
+  const project = data.project as Project | undefined;
+  const onUpdate = data.onUpdate as ((entity: Entity) => void) | undefined;
   const hasError = Boolean(data.hasError);
   const errorText = data.errorText ? String(data.errorText) : "";
   const Icon = kind === "timer" ? Timer : kind === "gpio" ? Lightbulb : kind === "node" ? Cpu : Radio;
   const color = hasError ? "var(--destructive)" : kind === "subscriber" || kind === "gpio" ? "var(--diagram-output-accent, var(--secondary))" : "var(--ring)";
-  return <div data-conflict={hasError ? "true" : undefined} title={hasError ? translate(errorText) : undefined} style={{ borderColor: hasError ? "var(--destructive)" : selected ? color : "var(--border)", width: 214 }} className="border bg-card shadow-xl">
-    {kind !== "timer" && kind !== "subscriber" && <Handle type="target" position={Position.Left} />}
-    <div className="flex items-center gap-2 border-b border-border px-4 py-3"><Icon size={15} style={{ color }} /><span className="text-[10px] font-bold tracking-widest" style={{ color }}>{translate(String(data.label))}</span>{hasError && <TriangleAlert size={13} aria-label={translate("Conflict")} className="ml-auto shrink-0 text-destructive" />}</div>
-    <div className="px-4 py-3"><div className="mono break-words text-sm text-foreground">{translate(String(data.title))}</div><div className="mt-1.5 break-words text-[11px] text-muted-foreground">{translate(String(data.detail))}</div></div>
-    {kind !== "gpio" && kind !== "publisher" && kind !== "node" && <Handle type="source" position={Position.Right} />}
-  </div>;
+
+  const isBehaviorNode = Boolean(entity && (data.label !== "PUBLISHER" && data.label !== "SUBSCRIBER"));
+  const profile = project ? boardProfile(project.board) : null;
+
+  return (
+    <div
+      data-conflict={hasError ? "true" : undefined}
+      title={hasError ? translate(errorText) : undefined}
+      style={{ borderColor: hasError ? "var(--destructive)" : selected ? color : "var(--border)", width: 236 }}
+      className="rounded-xl border-2 bg-card/95 shadow-xl backdrop-blur-sm"
+    >
+      {kind !== "timer" && kind !== "subscriber" && <Handle type="target" position={Position.Left} />}
+      <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5">
+        <Icon size={15} style={{ color }} />
+        <span className="text-[10px] font-bold tracking-widest" style={{ color }}>{translate(String(data.label))}</span>
+        {hasError && <TriangleAlert size={13} aria-label={translate("Conflict")} className="ml-auto shrink-0 text-destructive" />}
+      </div>
+      <div className="px-3.5 py-2.5 space-y-1.5">
+        <div className="mono break-words text-xs font-semibold text-foreground">{translate(String(data.title))}</div>
+        {(!isBehaviorNode || (!entity || (entity.kind !== "subscriber" && entity.kind !== "device"))) && (
+          <div className="break-words text-[11px] text-muted-foreground">{translate(String(data.detail))}</div>
+        )}
+
+        {isBehaviorNode && entity && project && onUpdate && profile && (
+          <>
+            {/* Subscriber digital output pin selector */}
+            {entity.kind === "subscriber" && (
+              <div className="pt-1.5 border-t border-border flex items-center justify-between gap-1.5">
+                <span className="text-[10px] text-muted-foreground font-mono">{translate("Output GPIO")}</span>
+                <select
+                  className="nodrag nopan rounded border border-border bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] text-foreground max-w-[140px]"
+                  value={entity.pin}
+                  onChange={e => {
+                    const pin = Number(e.target.value);
+                    const led = profile.builtInLed;
+                    onUpdate({
+                      ...entity,
+                      pin,
+                      ...(led?.pin === pin ? { activeLow: led.activeLow } : {})
+                    });
+                  }}
+                >
+                  {!profile.output.includes(entity.pin) && (
+                    <option value={entity.pin} disabled>
+                      GPIO {entity.pin} · {translate("unavailable")}
+                    </option>
+                  )}
+                  {profile.output.map(pin => (
+                    <option key={pin} value={pin}>
+                      {outputPinLabel(project.board, pin)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Device pins and I2C selector */}
+            {entity.kind === "device" && (() => {
+              const d = devices[entity.device] as DeviceDefinition;
+              return (
+                <div className="pt-1.5 border-t border-border space-y-1.5">
+                  {d.addresses && (
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="text-[10px] text-muted-foreground font-mono">{translate("I2C Address")}</span>
+                      <select
+                        className="nodrag nopan rounded border border-border bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] text-foreground max-w-[130px]"
+                        value={entity.address}
+                        onChange={e => onUpdate({ ...entity, address: Number(e.target.value) })}
+                      >
+                        {d.addresses.map((a: number) => (
+                          <option key={a} value={a}>
+                            0x{a.toString(16).toUpperCase()}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {d.pins.map(role => {
+                    const available = boardPins(project.board, role.mode);
+                    const currentPin = entity.pins[role.key];
+                    return (
+                      <div key={role.key} className="flex items-center justify-between gap-1.5">
+                        <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[80px]" title={translate(role.label)}>
+                          {translate(role.label)}
+                        </span>
+                        <select
+                          className="nodrag nopan rounded border border-border bg-muted/50 px-1 py-0.5 font-mono text-[10px] text-foreground max-w-[130px]"
+                          value={currentPin ?? -1}
+                          onChange={e => {
+                            const pin = Number(e.target.value);
+                            const led = profile.builtInLed;
+                            onUpdate({
+                              ...entity,
+                              pins: { ...entity.pins, [role.key]: pin },
+                              ...((entity.device === "led" || entity.device === "digital-output") && led?.pin === pin ? { activeLow: led.activeLow } : {})
+                            });
+                          }}
+                        >
+                          {role.optional && <option value={-1}>{translate("Not connected")}</option>}
+                          {!available.includes(currentPin) && currentPin !== -1 && (
+                            <option value={currentPin} disabled>
+                              GPIO {currentPin} · {translate("unavailable")}
+                            </option>
+                          )}
+                          {available.map(pin => (
+                            <option key={pin} value={pin}>
+                              {role.mode === "output" || role.mode === "pwm" ? outputPinLabel(project.board, pin) : `GPIO ${pin}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </>
+        )}
+      </div>
+      {kind !== "gpio" && kind !== "publisher" && kind !== "node" && <Handle type="source" position={Position.Right} />}
+    </div>
+  );
 }
+
+function getEntityHeight(entity: Entity): number {
+  if (entity.kind === "group") {
+    const channelCount = entity.channels?.length ?? 6;
+    return 80 + channelCount * 36;
+  }
+  if (entity.kind === "device") {
+    const d = devices[entity.device] as DeviceDefinition;
+    const pinCount = d?.pins?.length ?? 0;
+    const addressCount = d?.addresses ? 1 : 0;
+    return 105 + (pinCount + addressCount) * 30;
+  }
+  if (entity.kind === "subscriber") {
+    return 135;
+  }
+  return 115;
+}
+
 function buildDefaultNodes(project: Project, selected: string | null, onUpdate?: (entity: Entity) => void): Node[] {
   const next: Node[] = [];
   const entityIssues = validateEntityIssues(project);
-  let currentY = 45;
+  let currentY = 40;
   project.entities.forEach((entity) => {
     const y = currentY;
-    currentY += entity.kind === "group" ? 280 : 165;
+    const entityHeight = getEntityHeight(entity);
+    currentY += Math.max(entityHeight, 115) + 35;
     const pub = entityDirection(entity) === "publisher";
     const issues = entityIssues[entity.id] ?? [];
     const hasError = issues.length > 0;
@@ -266,7 +404,7 @@ function buildDefaultNodes(project: Project, selected: string | null, onUpdate?:
       next.push({
         id: entity.id,
         type: "program",
-        position: { x: pub ? 410 : 55, y },
+        position: { x: pub ? 440 : 50, y },
         selected: entity.id === selected,
         data: {
           kind: pub ? "publisher" : "subscriber",
@@ -274,13 +412,16 @@ function buildDefaultNodes(project: Project, selected: string | null, onUpdate?:
           title: entity.topic,
           detail: `geometry_msgs / ${entity.message}`,
           hasError,
-          errorText
+          errorText,
+          entity,
+          project,
+          onUpdate
         }
       });
       next.push({
         id: `${entity.id}:behavior`,
-        type: "group",
-        position: { x: pub ? 55 : 350, y },
+        type: "groupNode",
+        position: { x: pub ? 50 : 440, y },
         selected: entity.id === selected,
         data: {
           entity,
@@ -294,7 +435,7 @@ function buildDefaultNodes(project: Project, selected: string | null, onUpdate?:
       next.push({
         id: entity.id,
         type: "program",
-        position: { x: pub ? 380 : 55, y },
+        position: { x: pub ? 440 : 50, y },
         selected: entity.id === selected,
         data: {
           kind: pub ? "publisher" : "subscriber",
@@ -302,14 +443,21 @@ function buildDefaultNodes(project: Project, selected: string | null, onUpdate?:
           title: entity.topic,
           detail: `${["Vector3", "Twist"].includes(entityMessage(entity)) ? "geometry_msgs" : "std_msgs"} / ${entityMessage(entity)}`,
           hasError,
-          errorText
+          errorText,
+          entity,
+          project,
+          onUpdate
         }
       });
       next.push({
         id: `${entity.id}:behavior`,
         type: "program",
-        position: { x: pub ? 55 : 380, y },
+        position: { x: pub ? 50 : 440, y },
+        selected: entity.id === selected,
         data: {
+          entity,
+          project,
+          onUpdate,
           ...(entity.kind === "device"
             ? {
                 kind: pub ? "timer" : "gpio",
@@ -356,7 +504,7 @@ export function VisualEditor({ project, selected, onSelect, onUpdate }: { projec
   const { translate } = useLanguage();
   const { theme } = useTheme();
   // Keep the registry stable across renders and development Fast Refresh.
-  const [nodeTypes] = useState(() => ({ program: ProgramNode, group: GroupNode }));
+  const [nodeTypes] = useState(() => ({ program: ProgramNode, groupNode: GroupNode }));
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   useEffect(() => {
@@ -454,15 +602,18 @@ export function VisualEditor({ project, selected, onSelect, onUpdate }: { projec
   const [nodes, setNodes] = useState<Node[]>([]);
   useEffect(() => {
     const next = buildDefaultNodes(project, selected, onUpdate);
-    setNodes(previous => next.map(n => ({ ...n, position: previous.find(p => p.id === n.id)?.position ?? n.position })));
-  }, [project, selected, onUpdate]);
+    setNodes(previous => {
+      if (previous.length === 0) return next;
+      return next.map(n => ({ ...n, position: previous.find(p => p.id === n.id)?.position ?? n.position }));
+    });
+  }, [project, selected]);
 
   function autoArrange() {
     const next = buildDefaultNodes(project, selected, onUpdate);
     setNodes(next);
     setTimeout(() => {
-      void flow?.fitView({ padding: 0.18, minZoom: 0.08, maxZoom: 1.5, duration: 200 });
-    }, 20);
+      void flow?.fitView({ padding: 0.18, minZoom: 0.08, maxZoom: 1.5, duration: 250 });
+    }, 30);
   }
   const entityIssues = validateEntityIssues(project);
   const edges = project.entities.map(e => ({ id: `edge-${e.id}`, source: (entityDirection(e) === "publisher") ? `${e.id}:behavior` : e.id, target: (entityDirection(e) === "publisher") ? e.id : `${e.id}:behavior`, animated: true, style: { stroke: entityIssues[e.id]?.length ? "var(--destructive)" : (entityDirection(e) === "publisher") ? "var(--ring)" : "var(--diagram-output-accent, var(--secondary))" } }));
