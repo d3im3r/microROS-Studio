@@ -75,6 +75,87 @@ code, pre, .mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', m
 :root:not(.dark) { color-scheme: light; --background: oklch(0.9816 0.0017 247.8390); --foreground: oklch(0.2178 0 0); --card: oklch(1.0000 0 0); --card-foreground: oklch(0.2178 0 0); --popover: oklch(1.0000 0 0); --popover-foreground: oklch(0.2178 0 0); --primary: oklch(0.8606 0.1731 91.9357); --primary-foreground: oklch(0.3791 0.1378 265.5222); --secondary: oklch(0.3791 0.1378 265.5222); --secondary-foreground: oklch(1.0000 0 0); --muted: oklch(0.7848 0.0559 256.1493); --muted-foreground: oklch(0.2290 0.0459 21.2977); --accent: oklch(0.6368 0.2078 25.3313); --accent-foreground: oklch(1.0000 0 0); --destructive: oklch(0.4437 0.1613 26.8994); --destructive-foreground: oklch(1.0000 0 0); --border: oklch(0.6050 0.0024 17.2244); --input: oklch(1.0000 0 0); --ring: oklch(0.3791 0.1378 265.5222); --chart-1: oklch(0.3791 0.1378 265.5222); --chart-2: oklch(0.8606 0.1731 91.9357); --chart-3: oklch(0.6368 0.2078 25.3313); --chart-4: oklch(0.6959 0.1491 162.4796); --chart-5: oklch(0.6056 0.2189 292.7172); --radius: 0.5rem; --sidebar: oklch(0.3791 0.1378 265.5222); --sidebar-foreground: oklch(1.0000 0 0); --sidebar-primary: oklch(0.8606 0.1731 91.9357); --sidebar-primary-foreground: oklch(0.3791 0.1378 265.5222); --sidebar-accent: oklch(0.5461 0.2152 262.8809); --sidebar-accent-foreground: oklch(1.0000 0 0); --sidebar-border: oklch(0.3717 0.0392 257.2870); --sidebar-ring: oklch(0.8606 0.1731 91.9357); --font-sans: Inter, system-ui, sans-serif; --font-serif: Georgia, serif; --font-mono: JetBrains Mono, monospace; --shadow-color: #000000; --shadow-opacity: 0.15; --shadow-blur: 4px; --shadow-spread: 0px; --shadow-offset-x: 2px; --shadow-offset-y: 2px; --letter-spacing: -0.01em; --spacing: 0.25rem; --shadow-2xs: 2px 2px 4px 0px hsl(0 0% 0% / 0.07); --shadow-xs: 2px 2px 4px 0px hsl(0 0% 0% / 0.07); --shadow-sm: 2px 2px 4px 0px hsl(0 0% 0% / 0.15), 2px 1px 2px -1px hsl(0 0% 0% / 0.15); --shadow: 2px 2px 4px 0px hsl(0 0% 0% / 0.15), 2px 1px 2px -1px hsl(0 0% 0% / 0.15); --shadow-md: 2px 2px 4px 0px hsl(0 0% 0% / 0.15), 2px 2px 4px -1px hsl(0 0% 0% / 0.15); --shadow-lg: 2px 2px 4px 0px hsl(0 0% 0% / 0.15), 2px 4px 6px -1px hsl(0 0% 0% / 0.15); --shadow-xl: 2px 2px 4px 0px hsl(0 0% 0% / 0.15), 2px 8px 10px -1px hsl(0 0% 0% / 0.15); --shadow-2xl: 2px 2px 4px 0px hsl(0 0% 0% / 0.38); --tracking-normal: -0.01em; }
 :root.dark { color-scheme: dark; }
 
+/* d3im3r palette */
+:root[data-palette="d3im3r"] {
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --radius: 0.5rem;
+  --tracking-normal: 0em;
+  --shadow-color: #000000;
+  --shadow-opacity: 0.25;
+}
+:root[data-palette="d3im3r"]:not(.dark) {
+  --background: #F4F7FB;
+  --foreground: #172B45;
+  --card: #FFFFFF;
+  --card-foreground: #172B45;
+  --popover: #FFFFFF;
+  --popover-foreground: #172B45;
+  --primary: #0891B2;
+  --primary-foreground: #FFFFFF;
+  --secondary: #16A34A;
+  --secondary-foreground: #FFFFFF;
+  --muted: #E2E8F0;
+  --muted-foreground: #64748B;
+  --accent: #E0F2FE;
+  --accent-foreground: #172B45;
+  --destructive: #DC4660;
+  --destructive-foreground: #FFFFFF;
+  --border: #CBD5E1;
+  --input: #FFFFFF;
+  --ring: #0891B2;
+  --chart-1: #0891B2;
+  --chart-2: #16A34A;
+  --chart-3: #D97706;
+  --chart-4: #DC4660;
+  --chart-5: #6366F1;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #172B45;
+  --sidebar-primary: #0891B2;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F1F5F9;
+  --sidebar-accent-foreground: #0891B2;
+  --sidebar-border: #CBD5E1;
+  --sidebar-ring: #0891B2;
+  --diagram-output-accent: #16A34A;
+}
+:root[data-palette="d3im3r"].dark,
+:root.dark[data-palette="d3im3r"] {
+  --background: #0B1727;
+  --foreground: #FFFFFF;
+  --card: #101E30;
+  --card-foreground: #FFFFFF;
+  --popover: #101E30;
+  --popover-foreground: #FFFFFF;
+  --primary: #22D3EE;
+  --primary-foreground: #0B1727;
+  --secondary: #4ADE80;
+  --secondary-foreground: #0B1727;
+  --muted: #172A42;
+  --muted-foreground: #A5B4C7;
+  --accent: #172A42;
+  --accent-foreground: #FFFFFF;
+  --destructive: #FB7185;
+  --destructive-foreground: #FFFFFF;
+  --border: #35516B;
+  --input: #101E30;
+  --ring: #22D3EE;
+  --chart-1: #22D3EE;
+  --chart-2: #4ADE80;
+  --chart-3: #FFAD35;
+  --chart-4: #FB7185;
+  --chart-5: #818CF8;
+  --sidebar: #08101C;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #22D3EE;
+  --sidebar-primary-foreground: #0B1727;
+  --sidebar-accent: #101E30;
+  --sidebar-accent-foreground: #22D3EE;
+  --sidebar-border: #35516B;
+  --sidebar-ring: #22D3EE;
+  --diagram-output-accent: #4ADE80;
+}
+
 /* Original Studio palette; tweakcn remains the independent alternate palette. */
 :root[data-palette="default"] {
   --font-sans: Arial, Helvetica, sans-serif;

@@ -6,12 +6,12 @@ import { Moon, Sun } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { palettes, isPalette, type Palette } from "./catalog";
 type Theme = "light" | "dark";
-const ThemeContext = createContext<{ theme: Theme; toggle: () => void; palette: Palette; selectPalette: (palette: Palette) => void }>({ theme: "dark", toggle: () => {}, palette: "tweakcn", selectPalette: () => {} });
+const ThemeContext = createContext<{ theme: Theme; toggle: () => void; palette: Palette; selectPalette: (palette: Palette) => void }>({ theme: "dark", toggle: () => {}, palette: "d3im3r", selectPalette: () => {} });
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { translate } = useLanguage();
   const [theme, setTheme] = useState<Theme>("dark");
-  const [palette, setPalette] = useState<Palette>("tweakcn");
-  useEffect(() => { setPalette(isPalette(document.documentElement.dataset.palette) ? document.documentElement.dataset.palette : "tweakcn"); setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light"); }, []);
+  const [palette, setPalette] = useState<Palette>("d3im3r");
+  useEffect(() => { setPalette(isPalette(document.documentElement.dataset.palette) ? document.documentElement.dataset.palette : "d3im3r"); setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light"); }, []);
   function selectPalette(next: Palette) {
     document.documentElement.dataset.palette = next;
     setPalette(next);

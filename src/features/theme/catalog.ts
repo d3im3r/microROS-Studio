@@ -1,6 +1,7 @@
 export const palettes = [
-  { id: "default", label: "Default" },
+  { id: "d3im3r", label: "d3im3r" },
   { id: "tweakcn", label: "invincible theme" },
+  { id: "default", label: "Default" },
   { id: "clean-slate", label: "Clean Slate" },
 ] as const;
 export type Palette = typeof palettes[number]["id"];

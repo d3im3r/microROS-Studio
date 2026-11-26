@@ -131,8 +131,8 @@ test("palette selection is independent of mode and persists", async ({ page }) =
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
   const selector = page.getByRole("combobox", { name: "Color theme" });
-  await expect(selector).toHaveValue("tweakcn");
-  await expect(selector.locator("option")).toHaveText(["Default", "invincible theme", "Clean Slate"]);
+  await expect(selector).toHaveValue("d3im3r");
+  await expect(selector.locator("option")).toHaveText(["d3im3r", "invincible theme", "Default", "Clean Slate"]);
   const current = await page.locator("body").evaluate(e => getComputedStyle(e).backgroundColor);
   await selector.selectOption("default");
   await expect(page.locator("html")).toHaveAttribute("data-palette", "default");
