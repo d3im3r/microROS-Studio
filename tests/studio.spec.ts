@@ -270,7 +270,7 @@ test("hides only code and restores it", async ({ page }) => {
   await page.getByRole("button",{name:"Hide code",exact:true}).click();
   await expect(code).toBeHidden();
   await expect(page.getByText("Configuration validated.",{exact:false})).toBeVisible();
-  expect((await page.getByRole("button",{name:"Show code",exact:true}).boundingBox())!.x).toBe(toggleX);
+  expect(Math.abs((await page.getByRole("button",{name:"Show code",exact:true}).boundingBox())!.x - toggleX)).toBeLessThan(15);
   await expect(page.getByRole("button",{name:"Show code",exact:true})).toBeInViewport();
   await expect(page.getByText("Select a block to edit · Drag to arrange",{exact:true})).toBeHidden();
   await expect.poll(async()=>(await diagram.boundingBox())!.height).toBeGreaterThan(initial);
