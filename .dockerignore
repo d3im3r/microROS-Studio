@@ -1,0 +1,11 @@
+node_modules
+.next
+.next-e2e
+.git
+.github
+tests
+test-results
+.env*
+*.log
+*.tsbuildinfo
+docs

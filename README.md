@@ -3,11 +3,11 @@
     <source media="(prefers-color-scheme: dark)" srcset="public/brand/d3im3r/horizontal-dark.svg" />
     <img src="public/brand/d3im3r/horizontal-light.svg" alt="d3im3r owl-chip signature" width="360" />
   </picture>
-  <h1>microROS Studio · Beta 0.3</h1>
+  <h1>microROS Studio · v1.0</h1>
   <p>An interactive micro-ROS firmware builder for ESP32 boards.</p>
   <p>Created by <a href="https://github.com/d3im3r">d3im3r</a></p>
   <p>
-    <a href="https://github.com/d3im3r/microROS-Studio"><img src="https://img.shields.io/badge/version-Beta%200.3-facc15?style=flat" alt="Beta 0.3" /></a>
+    <a href="https://github.com/d3im3r/microROS-Studio"><img src="https://img.shields.io/badge/version-v1.0-22d3ee?style=flat" alt="v1.0" /></a>
     <a href="https://github.com/d3im3r/microROS-Studio/actions/workflows/ci.yml"><img src="https://github.com/d3im3r/microROS-Studio/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   </p>
   <p>
@@ -28,7 +28,7 @@
 
 Build a micro-ROS application through a guided hardware wizard and a visual program diagram. Download **`main.cpp`**, then use them with the [base firmware project](https://github.com/d3im3r/microROS-Studio/releases/download/v1.0.0/esp32-microros-template.zip).
 
-![microROS Studio Beta 0.3 editor in English](docs/studio-preview.png)
+![microROS Studio v1.0 editor in English](docs/studio-preview.png)
 
 ## Features
 
@@ -51,8 +51,10 @@ Build a micro-ROS application through a guided hardware wizard and a visual prog
 
 The starter program publishes `/counter` every second and subscribes to `/led` using `std_msgs/Bool`. Suggested node names end in `_node`, and topics start with `/`. The UDP Agent port is fixed at **8888**.
 
-## What’s new in Beta 0.3
+## What’s new in v1.0
 
+- **Production release (1.0):** Graduation from beta to official stable release.
+- **d3im3r palette:** New default cybernetic theme palette in dark and light modes.
 - **Responsive workspace:** aligned desktop columns, stacked panels on narrower screens, wrapping code controls and footer text, and automatic diagram fitting after resize.
 - **Passive buzzer tones:** `Int32` frequency commands on `/buzzer_frequency`, 100–10000 Hz, and `0` for silence. The active buzzer profile is removed.
 - **Hardware-aware naming:** sensor labels identify their technology and model; pin constants use device names such as `driver_tb1_IN4`, `joystick1_X` and `led1`.
@@ -230,7 +232,7 @@ npm run test:e2e
 
 Use `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome` to run browser tests with an existing Chrome installation. Playwright uses port 3101 and `.next-e2e`, separate from normal development. Test output and screenshots are ignored by Git.
 
-Beta 0.3 verification includes **48 generator tests**, **17 browser tests**, TypeScript checks and the production build. Generator tests cover validation, dependencies, C++ syntax with API doubles, simulated WiFi monitoring and passive-buzzer command handling. Browser tests cover the wizard, persistence, themes, board profiles, diagram navigation, downloads, retired-device migration and responsive layout. These checks do not replace building with PlatformIO and testing each physical circuit.
+v1.0 verification includes **57 generator tests**, **17 browser tests**, TypeScript checks and the production build. Generator tests cover validation, dependencies, C++ syntax with API doubles, simulated WiFi monitoring and passive-buzzer command handling. Browser tests cover the wizard, persistence, themes, board profiles, diagram navigation, downloads, retired-device migration and responsive layout. These checks do not replace building with PlatformIO and testing each physical circuit.
 
 GitHub Actions runs type checking, generator tests, the production build and browser tests for pull requests and pushes to `main`.
 

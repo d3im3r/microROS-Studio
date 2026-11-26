@@ -120,7 +120,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated?: () => void }
             <span className="font-normal text-muted-foreground">{translate("Studio")}</span>
           </div>
           <span className="hidden rounded border border-border px-1.5 py-0.5 text-[9px] text-muted-foreground md:inline">
-            {translate("BETA 0.3")}
+            {translate("v1.0")}
           </span>
           <div className="flex shrink-0 items-center gap-2 border-l border-border pl-3">
             <span className="hidden text-[10px] text-muted-foreground lg:inline">{translate("created by:")}</span>

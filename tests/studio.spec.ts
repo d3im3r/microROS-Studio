@@ -463,7 +463,7 @@ test("new devices, board-specific touch, names, onboard LED and next steps",asyn
 
 test("language toggle persists and keeps firmware unchanged", async ({page})=>{
  await page.goto("/");
- await expect(page.getByText("BETA 0.3",{exact:true})).toBeVisible();
+ await expect(page.getByText("v1.0",{exact:true})).toBeVisible();
  const original=await page.getByLabel("Generated code for main.cpp").locator(".code-text").allTextContents();
  await page.getByRole("button",{name:"Switch to Spanish"}).click();
  await expect(page.locator("html")).toHaveAttribute("lang","es");
